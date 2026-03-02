@@ -13,7 +13,7 @@ const BAR_COUNT = 5
 
 // Traveling wave: all bars share one frequency, evenly phase-shifted left→right.
 // This makes the motion look intentional (a smooth ripple) rather than random.
-const WAVE_FREQ       = 1.8                          // Hz
+const WAVE_FREQ       = 1.1                          // Hz — slower = less vibration feel
 const WAVE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT   // evenly spread one full cycle across 5 bars
 
 const STATE_COLORS: Record<OrbState, string> = {
@@ -95,8 +95,8 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
         const t = Date.now() / 1000
 
         for (let i = 0; i < BAR_COUNT; i++) {
-          // Traveling wave — same freq, phase shifts left→right
-          const osc = 0.5 + 0.25 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
+          // Traveling wave — same freq, phase shifts left→right; [0.35, 0.65] range
+          const osc = 0.5 + 0.15 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
           const targetH = minH + (maxH - minH) * vol * osc
           const rate = targetH > smoothed.current[i] ? 0.3 : 0.2
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
