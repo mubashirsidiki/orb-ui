@@ -105,12 +105,12 @@ export function createElevenLabsAdapter(
   let volumeInterval:  ReturnType<typeof setInterval> | null = null
   let currentMode:     ElevenLabsMode = 'listening'
 
-  // Subscriber callbacks — set when VoiceOrb subscribes
-  let _onStateChange: ((s: OrbState) => void) | null = null
-  let _onVolumeChange: ((v: number) => void) | null  = null
+  // Subscriber registry — supports multiple simultaneous subscribers
+  // (e.g. VoiceOrb + signal monitor both subscribing at the same time)
+  const subscribers = new Set<AdapterCallbacks>()
 
-  function emitState(s: OrbState) { _onStateChange?.(s) }
-  function emitVolume(v: number)  { _onVolumeChange?.(v) }
+  function emitState(s: OrbState)  { subscribers.forEach(cb => cb.onStateChange(s)) }
+  function emitVolume(v: number)   { subscribers.forEach(cb => cb.onVolumeChange(v)) }
 
   function startVolumePolling() {
     if (volumeInterval) return
@@ -173,14 +173,11 @@ export function createElevenLabsAdapter(
 
   return {
     // ── OrbAdapter.subscribe ────────────────────────────────────────────────
-    subscribe({ onStateChange, onVolumeChange }: AdapterCallbacks) {
-      _onStateChange  = onStateChange
-      _onVolumeChange = onVolumeChange
-
+    subscribe(callbacks: AdapterCallbacks) {
+      subscribers.add(callbacks)
       return () => {
-        _onStateChange  = null
-        _onVolumeChange = null
-        stopVolumePolling()
+        subscribers.delete(callbacks)
+        if (subscribers.size === 0) stopVolumePolling()
       }
     },
 
