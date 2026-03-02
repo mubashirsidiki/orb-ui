@@ -49,22 +49,38 @@ export interface ElevenLabsOrbAdapter extends OrbAdapter {
   stop(): Promise<void>
 }
 
-// ─── Volume notes ─────────────────────────────────────────────────────────────
+// ─── ElevenLabs signal normalization ─────────────────────────────────────────
 //
-// Unlike Vapi, ElevenLabs provides a clean, continuous audio signal via its
-// Web Audio worklet — no quantization artifacts, no noise floor treatment needed.
+// ElevenLabs provides two clean, continuous audio signals — no quantization
+// artifacts like Vapi. However both signals need gain + smoothing to match
+// Vapi's normalized output range.
+//
+// Empirical measurements (2026-03-02, live call):
+//   Raw PEAK = 0.64, AVG = 0.49 with OUTPUT_GAIN=1.8 → target PEAK ~0.95
+//   → New OUTPUT_GAIN = 1.8 × (0.95 / 0.64) = 2.7
 //
 // Volume sources:
-//   • onVadScore({ vadScore })  — VAD probability 0–1, fires continuously
-//     during the listening state. Drives the orb while the user speaks.
-//   • getOutputVolume()         — RMS of the AI's audio output, polled at
-//     ~30 fps during the speaking state. Drives the orb while the AI speaks.
+//   • onVadScore({ vadScore })  — VAD probability 0–1, fires during listening.
+//     Apply noise gate at 0.05 + EMA to clean up mic bleed between words.
+//   • getOutputVolume()         — Web Audio RMS of AI output, polled ~30fps.
+//     Apply OUTPUT_GAIN + EMA to match Vapi's dynamic range.
 //
-// getOutputVolume() typically returns small RMS values even at normal speech
-// volume (WebRTC audio is normalized but not loud). We amplify by 1.8× and
-// clamp to 1.0 to make the orb respond visibly.
+// EMA config: lighter than Vapi (EL signal is already clean, less smoothing needed)
+//   attack=0.5 (fast rise), release=0.15 (moderate decay)
 
-const OUTPUT_GAIN = 1.8
+const OUTPUT_GAIN   = 2.7
+const NOISE_FLOOR   = 0.05   // VAD scores below this are silence
+const EMA_ATTACK    = 0.5
+const EMA_RELEASE   = 0.15
+
+function makeEma() {
+  let state = 0
+  return function ema(input: number): number {
+    const rate = input > state ? EMA_ATTACK : EMA_RELEASE
+    state = state + (input - state) * rate
+    return state
+  }
+}
 
 /**
  * Creates an OrbAdapter for ElevenLabs Conversational AI.
@@ -105,6 +121,10 @@ export function createElevenLabsAdapter(
   let volumeInterval:  ReturnType<typeof setInterval> | null = null
   let currentMode:     ElevenLabsMode = 'listening'
 
+  // Per-adapter EMA instances — separate smoothers for output (speaking) and VAD (listening)
+  const emaOutput = makeEma()
+  const emaVad    = makeEma()
+
   // Subscriber registry — supports multiple simultaneous subscribers
   // (e.g. VoiceOrb + signal monitor both subscribing at the same time)
   const subscribers = new Set<AdapterCallbacks>()
@@ -117,7 +137,7 @@ export function createElevenLabsAdapter(
     volumeInterval = setInterval(() => {
       if (!conversation) return
       const raw = conversation.getOutputVolume()
-      emitVolume(Math.min(1, raw * OUTPUT_GAIN))
+      emitVolume(emaOutput(Math.min(1, raw * OUTPUT_GAIN)))
     }, 33) // ~30 fps
   }
 
@@ -149,9 +169,10 @@ export function createElevenLabsAdapter(
     },
 
     onVadScore: ({ vadScore }) => {
-      // VAD fires continuously during listening — drive the orb with mic energy
+      // VAD fires continuously during listening — noise gate + EMA, then drive orb
       if (currentMode === 'listening') {
-        emitVolume(vadScore)
+        const gated = vadScore < NOISE_FLOOR ? 0 : (vadScore - NOISE_FLOOR) / (1 - NOISE_FLOOR)
+        emitVolume(emaVad(gated))
       }
     },
 

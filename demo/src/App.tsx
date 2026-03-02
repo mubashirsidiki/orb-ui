@@ -195,10 +195,25 @@ export default function App() {
   }, [provider])
 
   const handleStop = useCallback(() => {
-    if (provider === 'vapi')        vapi?.stop()
+    if (provider === 'vapi')            vapi?.stop()
     else if (provider === 'elevenlabs') elAdapter?.stop()
     setConnected(false)
-  }, [provider])
+
+    // Flush final stats to the Vite volume-logger middleware
+    const mon = provider === 'vapi' ? vapiMon : elMon
+    const avg = mon.stats.samples > 0 ? mon.stats.sum / mon.stats.samples : 0
+    fetch('/api/volume-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider,
+        ts: new Date().toISOString(),
+        peak:   +mon.stats.peak.toFixed(4),
+        avg:    +avg.toFixed(4),
+        ticks:  mon.stats.samples,
+      }),
+    }).catch(() => {/* best-effort */})
+  }, [provider, vapiMon, elMon])
 
   const vapiMissing = !VAPI_PUBLIC_KEY || !VAPI_ASSISTANT_ID
   const elMissing   = !EL_AGENT_ID
