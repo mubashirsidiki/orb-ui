@@ -13,7 +13,7 @@ const BAR_COUNT = 5
 
 // Traveling wave: all bars share one frequency, evenly phase-shifted left→right.
 // This makes the motion look intentional (a smooth ripple) rather than random.
-const WAVE_FREQ       = 1.1                          // Hz — slower = less vibration feel
+const WAVE_FREQ       = 1.5                          // Hz
 const WAVE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT   // evenly spread one full cycle across 5 bars
 
 const STATE_COLORS: Record<OrbState, string> = {
