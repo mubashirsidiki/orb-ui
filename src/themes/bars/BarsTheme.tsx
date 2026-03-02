@@ -10,7 +10,12 @@ interface BarsThemeProps {
 }
 
 const BAR_COUNT = 5
-const MULTIPLIERS = [0.6, 0.85, 1.0, 0.85, 0.6]
+
+// Each bar oscillates at its own frequency + phase — no fixed height ratio.
+// This breaks the "diamond" shape: bars move independently, driven by volume.
+// Frequencies are in Hz; phases spread bars so they never all peak together.
+const BAR_FREQS  = [2.1, 1.6, 2.6, 1.9, 2.3]   // Hz
+const BAR_PHASES = [0.0, 1.2, 2.5, 0.6, 3.4]    // rad — arbitrary offsets
 
 const STATE_COLORS: Record<OrbState, string> = {
   idle: '#cccccc',
@@ -80,31 +85,21 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
     }
 
     if (state === 'listening' || state === 'speaking') {
-      // Each bar has its own lazy target — updated at ~12 Hz, not every frame.
-      // This kills per-frame jitter while keeping the organic, breathing feel.
-      const targets = new Array(BAR_COUNT).fill(minH)
-      let frameCount = 0
-      // How often to pick a new random target (frames). 5 ≈ 12 Hz at 60 fps.
-      const TARGET_INTERVAL = 5
-      // Variance: how much each bar can deviate from vol * multiplier.
-      // Speaking: tighter (±10%) — volume is the signal, randomness is texture.
-      // Listening: wider (±30%) — more organic bounce while waiting for user.
-      const variance = state === 'speaking' ? 0.10 : 0.30
+      // Each bar runs its own sine oscillator (unique freq + phase).
+      // Volume scales the amplitude — silence keeps bars low, speech drives them up.
+      // Asymmetric lerp: snap up fast (0.35), decay slowly (0.08) — speech rhythm feels snappy.
+      // Listening uses slower oscillators (÷1.6) for a gentler idle breathing feel.
+      const freqScale = state === 'speaking' ? 1.0 : 0.4
 
       const animate = () => {
         const vol = volumeRef.current
-        frameCount++
+        const t = Date.now() / 1000
 
-        if (frameCount % TARGET_INTERVAL === 0) {
-          for (let i = 0; i < BAR_COUNT; i++) {
-            const rand = 1 - variance + Math.random() * variance * 2
-            targets[i] = Math.max(minH, maxH * vol * MULTIPLIERS[i] * rand)
-          }
-        }
-
-        // Lerp toward targets: 0.12 is smooth but still snappy enough to track volume
         for (let i = 0; i < BAR_COUNT; i++) {
-          smoothed.current[i] += (targets[i] - smoothed.current[i]) * 0.12
+          const osc = 0.5 + 0.5 * Math.sin(t * BAR_FREQS[i] * freqScale * Math.PI * 2 + BAR_PHASES[i])
+          const targetH = minH + (maxH - minH) * vol * osc
+          const rate = targetH > smoothed.current[i] ? 0.35 : 0.08
+          smoothed.current[i] += (targetH - smoothed.current[i]) * rate
         }
 
         setBars(smoothed.current, color)
