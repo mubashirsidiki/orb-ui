@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/symlink-orb-ui.cjs"
   },
   "dependencies": {
     "@elevenlabs/client": "^0.15.0",

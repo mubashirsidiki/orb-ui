@@ -4,3 +4,4 @@ dist
 *.local
 demo/node_modules
 demo/dist
+volume-debug.log

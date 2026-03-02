@@ -39,57 +39,29 @@ interface VapiMessage {
 //
 // Normalization pipeline (runs at Vapi tick rate, ~10 Hz):
 //   a. Noise gate — anything below NOISE_FLOOR is treated as silence (→ 0).
-//      This zeroes out the two lowest quantized levels (0.000667, 0.00667)
-//      which are never real speech energy.
-//   b. Linear ramp — rescales the gated value to the full 0–1 range so that
-//      genuine quiet speech (0.0667) reads as ~0.0 after gating, not 0.42.
-//   c. EMA (exponential moving average) — smooths the alternating loud/silent
-//      pattern. Fast attack (0.65/tick) catches new speech immediately; slow
-//      release (0.12/tick) bridges ~100 ms dips without visible float.
-//
-// The resulting value is a clean, continuous 0–1 signal ready for the theme.
-//
-// NOTE: This normalization is intentionally NOT in CircleTheme or any other
-// theme. The theme just receives a clean 0–1 signal regardless of adapter.
+//   b. Linear ramp — rescales the gated value to the full 0–1 range.
+//   c. EMA — smooths the alternating loud/silent pattern.
+//      Fast attack (0.65) catches new speech; slow release (0.12) bridges dips.
 
 const NOISE_FLOOR = 0.12
-let emaVol = 0   // EMA state persists across start/stop cycles
-
-function normalizeVapiVolume(raw: number): number {
-  const gated = raw < NOISE_FLOOR ? 0 : (raw - NOISE_FLOOR) / (1 - NOISE_FLOOR)
-  const rate  = gated > emaVol ? 0.65 : 0.12
-  emaVol      = emaVol + (gated - emaVol) * rate
-  return emaVol
-}
 
 // ─── Vapi-specific state debouncing ──────────────────────────────────────────
 //
 // Vapi fires  speaking → listening → speaking  within ~200 ms at every
-// turn boundary (the AI finishes a sentence, briefly expects user input,
-// then continues). This flicker causes the visual layer to restart its rAF
-// loop and reset animation position on every turn.
-//
-// Fix: debounce the speaking → listening transition by 350 ms.
-// If speaking fires again before the timer expires the pending listening
-// event is silently dropped. Any other state transition cancels the timer
-// and emits immediately.
-
-let stateDebounceTimer: ReturnType<typeof setTimeout> | null = null
+// turn boundary. Fix: debounce the speaking → listening transition by 350 ms.
 
 function makeStateEmitter(onStateChange: (s: OrbState) => void) {
   let lastEmitted: OrbState = 'idle'
+  let timer: ReturnType<typeof setTimeout> | null = null
 
-  return function emitState(next: OrbState) {
-    if (stateDebounceTimer) {
-      clearTimeout(stateDebounceTimer)
-      stateDebounceTimer = null
-    }
+  function emitState(next: OrbState) {
+    if (timer) { clearTimeout(timer); timer = null }
 
     if (lastEmitted === 'speaking' && next === 'listening') {
-      stateDebounceTimer = setTimeout(() => {
+      timer = setTimeout(() => {
         lastEmitted = next
         onStateChange(next)
-        stateDebounceTimer = null
+        timer = null
       }, 350)
       return
     }
@@ -97,6 +69,12 @@ function makeStateEmitter(onStateChange: (s: OrbState) => void) {
     lastEmitted = next
     onStateChange(next)
   }
+
+  function clearTimer() {
+    if (timer) { clearTimeout(timer); timer = null }
+  }
+
+  return { emitState, clearTimer }
 }
 
 /**
@@ -117,6 +95,17 @@ function makeStateEmitter(onStateChange: (s: OrbState) => void) {
  * @param client - A Vapi instance from @vapi-ai/web
  */
 export function createVapiAdapter(client: VapiClient): OrbAdapter {
+  // ── Per-adapter EMA state ────────────────────────────────────────────────
+  // Kept inside the factory so multiple adapter instances never share state.
+  let emaVol = 0
+
+  function normalizeVapiVolume(raw: number): number {
+    const gated = raw < NOISE_FLOOR ? 0 : (raw - NOISE_FLOOR) / (1 - NOISE_FLOOR)
+    const rate  = gated > emaVol ? 0.65 : 0.12
+    emaVol      = emaVol + (gated - emaVol) * rate
+    return emaVol
+  }
+
   // ── Mic leak prevention ──────────────────────────────────────────────────
   // Vapi's WebRTC teardown doesn't always release the microphone track,
   // especially on repeated start/stop cycles. We intercept getUserMedia to
@@ -141,7 +130,7 @@ export function createVapiAdapter(client: VapiClient): OrbAdapter {
 
   return {
     subscribe({ onStateChange, onVolumeChange }: AdapterCallbacks) {
-      const emitState = makeStateEmitter(onStateChange)
+      const { emitState, clearTimer } = makeStateEmitter(onStateChange)
 
       const onCallStart  = () => emitState('listening')
 
@@ -198,10 +187,7 @@ export function createVapiAdapter(client: VapiClient): OrbAdapter {
       }
 
       return () => {
-        if (stateDebounceTimer) {
-          clearTimeout(stateDebounceTimer)
-          stateDebounceTimer = null
-        }
+        clearTimer()
         client.removeListener('call-start',   onCallStart as () => void)
         client.removeListener('call-end',     onCallEnd as () => void)
         client.removeListener('speech-start', onSpeechStart as () => void)

@@ -233,3 +233,5 @@
 {"provider":"elevenlabs","ts":"2026-03-02T22:22:29.799Z","peak":0.9754,"avg":0.7791,"ticks":115}
 {"provider":"vapi","ts":"2026-03-02T22:23:40.916Z","peak":0.9173,"avg":0.323,"ticks":104}
 {"provider":"elevenlabs","ts":"2026-03-02T22:23:49.449Z","peak":0.9898,"avg":0.8023,"ticks":110}
+{"provider":"vapi","ts":"2026-03-02T22:24:38.632Z","peak":0.9739,"avg":0.464,"ticks":81}
+{"provider":"vapi","ts":"2026-03-02T22:24:50.848Z","peak":0.9858,"avg":0.4663,"ticks":162}
