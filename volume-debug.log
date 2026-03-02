@@ -217,3 +217,7 @@
 {"batch":[{"t":1772283642417,"state":"listening","vol":0,"smoothed":0.0016},{"t":1772283642516,"state":"listening","vol":0,"smoothed":0.0016}]}
 {"provider":"vapi","ts":"2026-03-02T21:58:36.848Z","peak":0.9914,"avg":0.4232,"ticks":90}
 {"provider":"elevenlabs","ts":"2026-03-02T21:58:46.848Z","peak":0.6432,"avg":0.4904,"ticks":110}
+{"provider":"vapi","ts":"2026-03-02T22:03:00.948Z","peak":0.9336,"avg":0.5259,"ticks":40}
+{"provider":"elevenlabs","ts":"2026-03-02T22:03:10.148Z","peak":0.9404,"avg":0.7622,"ticks":110}
+{"provider":"elevenlabs","ts":"2026-03-02T22:03:18.748Z","peak":0.9982,"avg":0.7648,"ticks":233}
+{"provider":"vapi","ts":"2026-03-02T22:03:31.897Z","peak":0.9336,"avg":0.4661,"ticks":114}

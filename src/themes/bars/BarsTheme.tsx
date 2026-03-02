@@ -80,16 +80,33 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
     }
 
     if (state === 'listening' || state === 'speaking') {
+      // Each bar has its own lazy target — updated at ~12 Hz, not every frame.
+      // This kills per-frame jitter while keeping the organic, breathing feel.
+      const targets = new Array(BAR_COUNT).fill(minH)
+      let frameCount = 0
+      // How often to pick a new random target (frames). 5 ≈ 12 Hz at 60 fps.
+      const TARGET_INTERVAL = 5
+      // Variance: how much each bar can deviate from vol * multiplier.
+      // Speaking: tighter (±10%) — volume is the signal, randomness is texture.
+      // Listening: wider (±30%) — more organic bounce while waiting for user.
+      const variance = state === 'speaking' ? 0.10 : 0.30
+
       const animate = () => {
         const vol = volumeRef.current
-        for (let i = 0; i < BAR_COUNT; i++) {
-          const rand = state === 'speaking'
-            ? 0.5 + Math.random() * 0.5
-            : 0.3 + Math.random() * 0.7
+        frameCount++
 
-          const target = Math.max(minH, maxH * vol * MULTIPLIERS[i] * rand)
-          smoothed.current[i] += (target - smoothed.current[i]) * 0.18
+        if (frameCount % TARGET_INTERVAL === 0) {
+          for (let i = 0; i < BAR_COUNT; i++) {
+            const rand = 1 - variance + Math.random() * variance * 2
+            targets[i] = Math.max(minH, maxH * vol * MULTIPLIERS[i] * rand)
+          }
         }
+
+        // Lerp toward targets: 0.12 is smooth but still snappy enough to track volume
+        for (let i = 0; i < BAR_COUNT; i++) {
+          smoothed.current[i] += (targets[i] - smoothed.current[i]) * 0.12
+        }
+
         setBars(smoothed.current, color)
         rafRef.current = requestAnimationFrame(animate)
       }
