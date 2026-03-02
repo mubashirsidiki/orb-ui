@@ -11,11 +11,10 @@ interface BarsThemeProps {
 
 const BAR_COUNT = 5
 
-// Each bar oscillates at its own frequency + phase — no fixed height ratio.
-// This breaks the "diamond" shape: bars move independently, driven by volume.
-// Frequencies are in Hz; phases spread bars so they never all peak together.
-const BAR_FREQS  = [2.1, 1.6, 2.6, 1.9, 2.3]   // Hz
-const BAR_PHASES = [0.0, 1.2, 2.5, 0.6, 3.4]    // rad — arbitrary offsets
+// Traveling wave: all bars share one frequency, evenly phase-shifted left→right.
+// This makes the motion look intentional (a smooth ripple) rather than random.
+const WAVE_FREQ       = 1.8                          // Hz
+const WAVE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT   // evenly spread one full cycle across 5 bars
 
 const STATE_COLORS: Record<OrbState, string> = {
   idle: '#cccccc',
@@ -96,8 +95,8 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
         const t = Date.now() / 1000
 
         for (let i = 0; i < BAR_COUNT; i++) {
-          // Oscillates in [0.25, 0.75] — bars have real range without hitting extremes
-          const osc = 0.5 + 0.25 * Math.sin(t * BAR_FREQS[i] * freqScale * Math.PI * 2 + BAR_PHASES[i])
+          // Traveling wave — same freq, phase shifts left→right
+          const osc = 0.5 + 0.25 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
           const targetH = minH + (maxH - minH) * vol * osc
           const rate = targetH > smoothed.current[i] ? 0.3 : 0.2
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
