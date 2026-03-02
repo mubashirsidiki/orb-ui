@@ -96,7 +96,8 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
         const t = Date.now() / 1000
 
         for (let i = 0; i < BAR_COUNT; i++) {
-          const osc = 0.5 + 0.5 * Math.sin(t * BAR_FREQS[i] * freqScale * Math.PI * 2 + BAR_PHASES[i])
+          // Oscillates in [0.5, 1.0] — bars never drop below half their vol-driven height
+          const osc = 0.75 + 0.25 * Math.sin(t * BAR_FREQS[i] * freqScale * Math.PI * 2 + BAR_PHASES[i])
           const targetH = minH + (maxH - minH) * vol * osc
           const rate = targetH > smoothed.current[i] ? 0.35 : 0.08
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
