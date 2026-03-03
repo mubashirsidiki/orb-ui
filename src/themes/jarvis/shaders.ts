@@ -12,7 +12,7 @@ float noise(vec3 p) {
 void main() {
   vNormal = normalize(normalMatrix * normal);
   vec3 pos = position;
-  float displacement = noise(pos * 1.5 + uTime * 0.3) * (0.08 + uVolume * 0.35);
+  float displacement = noise(pos * 1.5 + uTime * 0.3) * (0.01 + uVolume * 0.03);
   pos += normal * displacement;
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   vViewDir = -mvPosition.xyz;

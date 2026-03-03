@@ -7,12 +7,9 @@ import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
 import { vertexShader, fragmentShader } from './shaders'
 import {
   STATE_CONFIG,
-  RING_DEFS,
-  PARTICLE_COUNT,
-  PARTICLE_RADIUS_MIN,
-  PARTICLE_RADIUS_MAX,
-  PARTICLE_SIZE,
-  PARTICLE_BASE_OPACITY,
+  RING1_RADIUS, RING1_PARTICLES, RING1_WAVE_FREQ, RING1_WAVE_SPEED, RING1_TILT_X,
+  RING2_RADIUS, RING2_PARTICLES, RING2_WAVE_FREQ, RING2_WAVE_SPEED, RING2_TILT_X,
+  RING_PARTICLE_SIZE, RING_COLOR, VOLUME_AMP,
   LERP_RATE,
 } from './constants'
 
@@ -26,6 +23,25 @@ interface JarvisThemeProps {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
+}
+
+function updateRing(
+  positions: Float32Array, N: number, radius: number,
+  waveFreq: number, waveSpeed: number, amplitude: number,
+  time: number, tiltX: number,
+) {
+  for (let i = 0; i < N; i++) {
+    const angle = (i / N) * Math.PI * 2
+    const disp = amplitude * Math.sin(angle * waveFreq + time * waveSpeed)
+    const r = radius + disp
+    const x = r * Math.cos(angle)
+    const yFlat = r * Math.sin(angle)
+    const y = yFlat * Math.cos(tiltX)
+    const z = yFlat * Math.sin(tiltX)
+    positions[i * 3] = x
+    positions[i * 3 + 1] = y
+    positions[i * 3 + 2] = z
+  }
 }
 
 export function JarvisTheme({ state, volume, size, className, style }: JarvisThemeProps) {
@@ -49,11 +65,16 @@ export function JarvisTheme({ state, volume, size, className, style }: JarvisThe
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     renderer.setPixelRatio(dpr)
     renderer.setSize(size, size)
+    renderer.setClearColor(0x000000, 0)
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
 
     // ── Post-processing (bloom) ──────────────────────────────────────────────
-    const composer = new EffectComposer(renderer)
+    const renderTarget = new THREE.WebGLRenderTarget(size * dpr, size * dpr, {
+      type: THREE.HalfFloatType,
+      format: THREE.RGBAFormat,
+    })
+    const composer = new EffectComposer(renderer, renderTarget)
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size, size),
@@ -64,7 +85,7 @@ export function JarvisTheme({ state, volume, size, className, style }: JarvisThe
     composer.addPass(bloomPass)
 
     // ── Sphere with custom shader ────────────────────────────────────────────
-    const sphereGeo = new THREE.IcosahedronGeometry(1, 6)
+    const sphereGeo = new THREE.IcosahedronGeometry(1, 5)
     const sphereMat = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -81,49 +102,39 @@ export function JarvisTheme({ state, volume, size, className, style }: JarvisThe
     const sphere = new THREE.Mesh(sphereGeo, sphereMat)
     scene.add(sphere)
 
-    // ── 3D Rings ─────────────────────────────────────────────────────────────
-    const rings: THREE.Mesh[] = []
-    for (const def of RING_DEFS) {
-      const ringGeo = new THREE.TorusGeometry(def.radius, def.tube, 2, 120)
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
-        transparent: true,
-        opacity: 0.7,
-      })
-      const ring = new THREE.Mesh(ringGeo, ringMat)
-      ring.rotation.x = def.tiltX
-      ring.rotation.z = def.tiltZ
-      scene.add(ring)
-      rings.push(ring)
-    }
-
-    // ── Particle cloud ───────────────────────────────────────────────────────
-    const positions = new Float32Array(PARTICLE_COUNT * 3)
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const theta = Math.random() * Math.PI * 2
-      const phi = Math.acos(2 * Math.random() - 1)
-      const r = PARTICLE_RADIUS_MIN + Math.random() * (PARTICLE_RADIUS_MAX - PARTICLE_RADIUS_MIN)
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
-      positions[i * 3 + 2] = r * Math.cos(phi)
-    }
-    const particleGeo = new THREE.BufferGeometry()
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    const particleMat = new THREE.PointsMaterial({
-      color: 0x00d4ff,
-      size: PARTICLE_SIZE,
+    // ── Particle Ring 1 ──────────────────────────────────────────────────────
+    const ring1Positions = new Float32Array(RING1_PARTICLES * 3)
+    const ring1Geo = new THREE.BufferGeometry()
+    ring1Geo.setAttribute('position', new THREE.BufferAttribute(ring1Positions, 3))
+    const ring1Mat = new THREE.PointsMaterial({
+      color: RING_COLOR,
+      size: RING_PARTICLE_SIZE,
       transparent: true,
-      opacity: PARTICLE_BASE_OPACITY,
+      opacity: 0.5,
+      depthWrite: false,
     })
-    const points = new THREE.Points(particleGeo, particleMat)
-    scene.add(points)
+    const ring1Points = new THREE.Points(ring1Geo, ring1Mat)
+    scene.add(ring1Points)
+
+    // ── Particle Ring 2 ──────────────────────────────────────────────────────
+    const ring2Positions = new Float32Array(RING2_PARTICLES * 3)
+    const ring2Geo = new THREE.BufferGeometry()
+    ring2Geo.setAttribute('position', new THREE.BufferAttribute(ring2Positions, 3))
+    const ring2Mat = new THREE.PointsMaterial({
+      color: RING_COLOR,
+      size: RING_PARTICLE_SIZE,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    })
+    const ring2Points = new THREE.Points(ring2Geo, ring2Mat)
+    scene.add(ring2Points)
 
     // ── Animation state ──────────────────────────────────────────────────────
     let currentBloom = STATE_CONFIG[state].bloomStrength
-    let currentBrightness = STATE_CONFIG[state].brightness
-    let currentSphereSpeed = STATE_CONFIG[state].sphereSpeed
+    let currentAmplitude = STATE_CONFIG[state].amplitude
+    let currentSphereVol = STATE_CONFIG[state].sphereVol
     let currentRingOpacity = STATE_CONFIG[state].ringOpacity
-    let currentVolMult = STATE_CONFIG[state].volMult
     let currentColorR = STATE_CONFIG[state].color.r
     let currentColorG = STATE_CONFIG[state].color.g
     let currentColorB = STATE_CONFIG[state].color.b
@@ -138,42 +149,41 @@ export function JarvisTheme({ state, volume, size, className, style }: JarvisThe
 
       // Lerp all state values
       currentBloom = lerp(currentBloom, cfg.bloomStrength, LERP_RATE)
-      currentBrightness = lerp(currentBrightness, cfg.brightness, LERP_RATE)
-      currentSphereSpeed = lerp(currentSphereSpeed, cfg.sphereSpeed, LERP_RATE)
+      currentAmplitude = lerp(currentAmplitude, cfg.amplitude, LERP_RATE)
+      currentSphereVol = lerp(currentSphereVol, cfg.sphereVol, LERP_RATE)
       currentRingOpacity = lerp(currentRingOpacity, cfg.ringOpacity, LERP_RATE)
-      currentVolMult = lerp(currentVolMult, cfg.volMult, LERP_RATE)
       currentColorR = lerp(currentColorR, cfg.color.r, LERP_RATE)
       currentColorG = lerp(currentColorG, cfg.color.g, LERP_RATE)
       currentColorB = lerp(currentColorB, cfg.color.b, LERP_RATE)
 
-      time += 0.016 * currentSphereSpeed
+      time += 0.016
+
+      // Ring amplitude = state amplitude + volume contribution
+      const ringAmplitude = currentAmplitude + vol * VOLUME_AMP
 
       // Update sphere uniforms
       sphereMat.uniforms.uTime.value = time
-      sphereMat.uniforms.uVolume.value = vol * currentVolMult
+      sphereMat.uniforms.uVolume.value = currentSphereVol * vol
       sphereMat.uniforms.uColor.value.setRGB(currentColorR, currentColorG, currentColorB)
-      sphereMat.uniforms.uBrightness.value = currentBrightness
+      sphereMat.uniforms.uBrightness.value = 0.6 + vol * 0.4
 
       // Sphere slow rotation
-      sphere.rotation.y += 0.002 * currentSphereSpeed
-      sphere.rotation.x += 0.001 * currentSphereSpeed
+      sphere.rotation.y += 0.002
+      sphere.rotation.x += 0.001
 
       // Update bloom
       bloomPass.strength = currentBloom + vol * 0.8
 
-      // Update rings
-      rings.forEach((ring, i) => {
-        const def = RING_DEFS[i]
-        ring.rotation.y += def.speed * 0.016
-        const mat = ring.material as THREE.MeshBasicMaterial
-        mat.opacity = currentRingOpacity + vol * 0.3
-        mat.color.setRGB(currentColorR, currentColorG, currentColorB)
-      })
+      // Update particle rings
+      updateRing(ring1Positions, RING1_PARTICLES, RING1_RADIUS, RING1_WAVE_FREQ, RING1_WAVE_SPEED, ringAmplitude, time, RING1_TILT_X)
+      ring1Geo.attributes.position.needsUpdate = true
+      ring1Mat.opacity = currentRingOpacity
+      ring1Mat.color.setRGB(currentColorR, currentColorG, currentColorB)
 
-      // Update particles
-      points.rotation.y += 0.0005
-      particleMat.opacity = 0.4 + vol * 0.4
-      particleMat.color.setRGB(currentColorR, currentColorG, currentColorB)
+      updateRing(ring2Positions, RING2_PARTICLES, RING2_RADIUS, RING2_WAVE_FREQ, RING2_WAVE_SPEED, ringAmplitude, time, RING2_TILT_X)
+      ring2Geo.attributes.position.needsUpdate = true
+      ring2Mat.opacity = currentRingOpacity
+      ring2Mat.color.setRGB(currentColorR, currentColorG, currentColorB)
 
       // Render with post-processing
       composer.render()
@@ -188,12 +198,11 @@ export function JarvisTheme({ state, volume, size, className, style }: JarvisThe
       cancelAnimationFrame(rafId)
       sphereGeo.dispose()
       sphereMat.dispose()
-      rings.forEach(ring => {
-        ring.geometry.dispose()
-        ;(ring.material as THREE.MeshBasicMaterial).dispose()
-      })
-      particleGeo.dispose()
-      particleMat.dispose()
+      ring1Geo.dispose()
+      ring1Mat.dispose()
+      ring2Geo.dispose()
+      ring2Mat.dispose()
+      renderTarget.dispose()
       bloomPass.dispose()
       composer.dispose()
       renderer.dispose()
