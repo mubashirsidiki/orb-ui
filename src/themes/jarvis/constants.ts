@@ -1,133 +1,37 @@
 import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
 
-// ─── Base scale reference ─────────────────────────────────────────────────────
-// All radii are expressed as fractions of a 240px canvas, then scaled by size/240.
+export const COLOR_CYAN = { r: 0, g: 0.831, b: 1.0 } // #00d4ff
+export const COLOR_RED = { r: 1.0, g: 0.2, b: 0.2 } // #ff3333
 
-export const BASE_SIZE = 240
-export const HALF = BASE_SIZE / 2
-
-// ─── Radii (in base 240px units) ─────────────────────────────────────────────
-export const CORE_BASE_RADIUS = 16
-export const CORE_MAX_RADIUS  = 26
-
-export const RING1_RADIUS = 55
-export const RING2_RADIUS = 78
-export const RING3_RADIUS = 100
-
-export const PARTICLE_INNER_RADIUS = 70
-export const PARTICLE_OUTER_RADIUS = 110
-
-// ─── Colors ───────────────────────────────────────────────────────────────────
-export const COLOR_CYAN  = '#00d4ff'
-export const COLOR_RED   = '#ff4444'
-
-// ─── Per-state config ─────────────────────────────────────────────────────────
-interface StateConfig {
-  targetBrightness: number   // 0–1, overall opacity/glow multiplier
-  ringSpeedMult: number      // base rotation speed multiplier for rings
-  scanLineMult: number       // scan line speed multiplier
-  flicker: boolean           // whether to apply a flicker effect
-  color: string              // base color
+export interface StateConfig {
+  bloomStrength: number
+  brightness: number
+  sphereSpeed: number
+  ringOpacity: number
+  volMult: number
+  color: { r: number; g: number; b: number }
 }
 
 export const STATE_CONFIG: Record<OrbState, StateConfig> = {
-  idle: {
-    targetBrightness: 0.4,
-    ringSpeedMult:    0.3,
-    scanLineMult:     1.0,
-    flicker:          false,
-    color:            COLOR_CYAN,
-  },
-  connecting: {
-    targetBrightness: 0.6,
-    ringSpeedMult:    1.0,
-    scanLineMult:     1.5,
-    flicker:          true,
-    color:            COLOR_CYAN,
-  },
-  listening: {
-    targetBrightness: 0.7,
-    ringSpeedMult:    0.7,
-    scanLineMult:     1.0,
-    flicker:          false,
-    color:            COLOR_CYAN,
-  },
-  thinking: {
-    targetBrightness: 0.85,
-    ringSpeedMult:    1.4,
-    scanLineMult:     2.5,
-    flicker:          true,
-    color:            COLOR_CYAN,
-  },
-  speaking: {
-    targetBrightness: 1.0,
-    ringSpeedMult:    1.5,
-    scanLineMult:     1.2,
-    flicker:          false,
-    color:            COLOR_CYAN,
-  },
-  error: {
-    targetBrightness: 0.9,
-    ringSpeedMult:    0.8,
-    scanLineMult:     0.8,
-    flicker:          true,
-    color:            COLOR_RED,
-  },
-  disconnected: {
-    targetBrightness: 0.15,
-    ringSpeedMult:    0.05,
-    scanLineMult:     0.1,
-    flicker:          false,
-    color:            COLOR_CYAN,
-  },
+  idle:         { bloomStrength: 0.6,  brightness: 0.6,  sphereSpeed: 0.15, ringOpacity: 0.4, volMult: 0.3,  color: COLOR_CYAN },
+  connecting:   { bloomStrength: 0.9,  brightness: 0.8,  sphereSpeed: 0.4,  ringOpacity: 0.6, volMult: 0.4,  color: COLOR_CYAN },
+  listening:    { bloomStrength: 1.1,  brightness: 0.9,  sphereSpeed: 0.5,  ringOpacity: 0.7, volMult: 0.5,  color: COLOR_CYAN },
+  thinking:     { bloomStrength: 1.3,  brightness: 1.0,  sphereSpeed: 0.8,  ringOpacity: 0.8, volMult: 0.6,  color: COLOR_CYAN },
+  speaking:     { bloomStrength: 1.8,  brightness: 1.2,  sphereSpeed: 1.0,  ringOpacity: 1.0, volMult: 1.0,  color: COLOR_CYAN },
+  error:        { bloomStrength: 1.5,  brightness: 1.1,  sphereSpeed: 0.3,  ringOpacity: 0.8, volMult: 0.2,  color: COLOR_RED },
+  disconnected: { bloomStrength: 0.3,  brightness: 0.3,  sphereSpeed: 0.05, ringOpacity: 0.2, volMult: 0.1,  color: COLOR_CYAN },
 }
 
-// ─── Ring definitions ─────────────────────────────────────────────────────────
-export interface RingDef {
-  radius:      number   // base radius (240px units)
-  segments:    number   // number of arc segments
-  gapFraction: number   // fraction of circumference that are gaps
-  direction:   1 | -1  // 1 = clockwise, -1 = counter-clockwise
-  baseSpeed:   number   // radians per frame at 60fps baseline
-  lineWidth:   number
-  glowSize:    number
-}
-
-export const RING_DEFS: RingDef[] = [
-  {
-    radius:      RING1_RADIUS,
-    segments:    4,
-    gapFraction: 0.15,
-    direction:   1,
-    baseSpeed:   0.008,
-    lineWidth:   1.5,
-    glowSize:    10,
-  },
-  {
-    radius:      RING2_RADIUS,
-    segments:    6,
-    gapFraction: 0.20,
-    direction:   -1,
-    baseSpeed:   0.006,
-    lineWidth:   1.5,
-    glowSize:    8,
-  },
-  {
-    radius:      RING3_RADIUS,
-    segments:    3,
-    gapFraction: 0.08,
-    direction:   1,
-    baseSpeed:   0.003,
-    lineWidth:   2,
-    glowSize:    14,
-  },
+export const RING_DEFS = [
+  { radius: 1.35, tube: 0.008, tiltX: 0.2,  tiltZ: 0.1,  speed: 0.4 },
+  { radius: 1.6,  tube: 0.006, tiltX: -0.3, tiltZ: 0.5,  speed: -0.25 },
+  { radius: 1.85, tube: 0.005, tiltX: 0.1,  tiltZ: -0.2, speed: 0.15 },
 ]
 
-// ─── Animation constants ──────────────────────────────────────────────────────
-export const BRIGHTNESS_LERP_RATE  = 0.04
-export const RING_SPEED_LERP_RATE  = 0.03
-export const SCAN_LINE_BASE_SPEED  = 0.8 / 60   // 0.8 rad/sec at 60fps
-export const PARTICLE_COUNT        = 25
-export const PARTICLE_DOT_RADIUS   = 1.5
-export const BACKGROUND_GRID_ALPHA = 0.06
-export const BACKGROUND_GRID_RINGS = 5
+export const PARTICLE_COUNT = 800
+export const PARTICLE_RADIUS_MIN = 1.9
+export const PARTICLE_RADIUS_MAX = 2.4
+export const PARTICLE_SIZE = 0.015
+export const PARTICLE_BASE_OPACITY = 0.6
+
+export const LERP_RATE = 0.04

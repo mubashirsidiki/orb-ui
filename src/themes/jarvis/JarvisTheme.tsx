@@ -1,279 +1,212 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
+import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
+import { vertexShader, fragmentShader } from './shaders'
 import {
-  BASE_SIZE,
-  CORE_BASE_RADIUS,
-  CORE_MAX_RADIUS,
-  RING3_RADIUS,
-  RING_DEFS,
   STATE_CONFIG,
-  BRIGHTNESS_LERP_RATE,
-  RING_SPEED_LERP_RATE,
-  SCAN_LINE_BASE_SPEED,
-  BACKGROUND_GRID_ALPHA,
-  BACKGROUND_GRID_RINGS,
+  RING_DEFS,
+  PARTICLE_COUNT,
+  PARTICLE_RADIUS_MIN,
+  PARTICLE_RADIUS_MAX,
+  PARTICLE_SIZE,
+  PARTICLE_BASE_OPACITY,
+  LERP_RATE,
 } from './constants'
-import { createParticles, updateParticles, drawParticles } from './particles'
-import { drawRing, drawScanLine, drawBackgroundGrid } from './rings'
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface JarvisThemeProps {
-  state:     OrbState
-  volume:    number
-  size:      number
+  state: OrbState
+  volume: number
+  size: number
   className?: string
-  style?:    React.CSSProperties
+  style?: React.CSSProperties
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
 
-function parseHexColor(hex: string): [number, number, number] {
-  const h = hex.replace('#', '')
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ]
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  return `#${[r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function JarvisTheme({ state, volume, size, className, style }: JarvisThemeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  // Volume ref — read inside rAF loop without triggering effect restarts
   const volumeRef = useRef(volume)
-  useLayoutEffect(() => { volumeRef.current = volume }, [volume])
-
-  // State ref — needed inside animation loop for particle updates, but
-  // we also keep state in the useEffect dep array so major state transitions
-  // restart the loop cleanly.
   const stateRef = useRef(state)
+
+  useLayoutEffect(() => { volumeRef.current = volume }, [volume])
   useLayoutEffect(() => { stateRef.current = state }, [state])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || size <= 0) return
 
-    // ── HiDPI setup ────────────────────────────────────────────────────────
-    const dpr = window.devicePixelRatio || 1
-    canvas.width  = size * dpr
-    canvas.height = size * dpr
+    // ── Scene setup ──────────────────────────────────────────────────────────
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100)
+    camera.position.z = 3.5
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    renderer.setPixelRatio(dpr)
+    renderer.setSize(size, size)
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.2
 
-    ctx.scale(dpr, dpr)
+    // ── Post-processing (bloom) ──────────────────────────────────────────────
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(size, size),
+      1.5,  // strength
+      0.4,  // radius
+      0.85, // threshold
+    )
+    composer.addPass(bloomPass)
 
-    const cx    = size / 2
-    const cy    = size / 2
-    const scale = size / BASE_SIZE   // scale factor from 240px base
+    // ── Sphere with custom shader ────────────────────────────────────────────
+    const sphereGeo = new THREE.IcosahedronGeometry(1, 6)
+    const sphereMat = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uVolume: { value: 0 },
+        uColor: { value: new THREE.Color(0x00d4ff) },
+        uBrightness: { value: 0.6 },
+      },
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat)
+    scene.add(sphere)
 
-    // ── Mutable animation state ────────────────────────────────────────────
-    let currentBrightness = STATE_CONFIG[state].targetBrightness
-    let currentRingSpeedMult = STATE_CONFIG[state].ringSpeedMult
-    let scanAngle = 0
+    // ── 3D Rings ─────────────────────────────────────────────────────────────
+    const rings: THREE.Mesh[] = []
+    for (const def of RING_DEFS) {
+      const ringGeo = new THREE.TorusGeometry(def.radius, def.tube, 2, 120)
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x00d4ff,
+        transparent: true,
+        opacity: 0.7,
+      })
+      const ring = new THREE.Mesh(ringGeo, ringMat)
+      ring.rotation.x = def.tiltX
+      ring.rotation.z = def.tiltZ
+      scene.add(ring)
+      rings.push(ring)
+    }
 
-    // Ring rotation angles — one per ring
-    const ringAngles = RING_DEFS.map(() => Math.random() * Math.PI * 2)
+    // ── Particle cloud ───────────────────────────────────────────────────────
+    const positions = new Float32Array(PARTICLE_COUNT * 3)
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.acos(2 * Math.random() - 1)
+      const r = PARTICLE_RADIUS_MIN + Math.random() * (PARTICLE_RADIUS_MAX - PARTICLE_RADIUS_MIN)
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+      positions[i * 3 + 2] = r * Math.cos(phi)
+    }
+    const particleGeo = new THREE.BufferGeometry()
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const particleMat = new THREE.PointsMaterial({
+      color: 0x00d4ff,
+      size: PARTICLE_SIZE,
+      transparent: true,
+      opacity: PARTICLE_BASE_OPACITY,
+    })
+    const points = new THREE.Points(particleGeo, particleMat)
+    scene.add(points)
 
-    // Current ring speed multipliers (lerped individually)
-    const ringSpeedMults = RING_DEFS.map(() => STATE_CONFIG[state].ringSpeedMult)
-
-    // Color lerp state
-    let [cr, cg, cb] = parseHexColor(STATE_CONFIG[state].color)
-
-    // Particle system
-    const particles = createParticles()
-
-    // Flicker state
-    let flickerOffset = 0
-
+    // ── Animation state ──────────────────────────────────────────────────────
+    let currentBloom = STATE_CONFIG[state].bloomStrength
+    let currentBrightness = STATE_CONFIG[state].brightness
+    let currentSphereSpeed = STATE_CONFIG[state].sphereSpeed
+    let currentRingOpacity = STATE_CONFIG[state].ringOpacity
+    let currentVolMult = STATE_CONFIG[state].volMult
+    let currentColorR = STATE_CONFIG[state].color.r
+    let currentColorG = STATE_CONFIG[state].color.g
+    let currentColorB = STATE_CONFIG[state].color.b
+    let time = 0
     let rafId = 0
 
-    // ── Animation loop ─────────────────────────────────────────────────────
+    // ── Animation loop ───────────────────────────────────────────────────────
     const animate = () => {
-      const vol      = volumeRef.current
-      const st       = stateRef.current
-      const cfg      = STATE_CONFIG[st]
+      const vol = volumeRef.current
+      const st = stateRef.current
+      const cfg = STATE_CONFIG[st]
 
-      // Lerp brightness
-      currentBrightness = lerp(currentBrightness, cfg.targetBrightness, BRIGHTNESS_LERP_RATE)
+      // Lerp all state values
+      currentBloom = lerp(currentBloom, cfg.bloomStrength, LERP_RATE)
+      currentBrightness = lerp(currentBrightness, cfg.brightness, LERP_RATE)
+      currentSphereSpeed = lerp(currentSphereSpeed, cfg.sphereSpeed, LERP_RATE)
+      currentRingOpacity = lerp(currentRingOpacity, cfg.ringOpacity, LERP_RATE)
+      currentVolMult = lerp(currentVolMult, cfg.volMult, LERP_RATE)
+      currentColorR = lerp(currentColorR, cfg.color.r, LERP_RATE)
+      currentColorG = lerp(currentColorG, cfg.color.g, LERP_RATE)
+      currentColorB = lerp(currentColorB, cfg.color.b, LERP_RATE)
 
-      // Lerp ring speed multiplier
-      const targetSpeedMult = cfg.ringSpeedMult + vol * 1.5
-      currentRingSpeedMult  = lerp(currentRingSpeedMult, targetSpeedMult, RING_SPEED_LERP_RATE)
+      time += 0.016 * currentSphereSpeed
 
-      // Lerp color
-      const [tr, tg, tb] = parseHexColor(cfg.color)
-      cr = lerp(cr, tr, 0.04)
-      cg = lerp(cg, tg, 0.04)
-      cb = lerp(cb, tb, 0.04)
-      const color = rgbToHex(cr, cg, cb)
+      // Update sphere uniforms
+      sphereMat.uniforms.uTime.value = time
+      sphereMat.uniforms.uVolume.value = vol * currentVolMult
+      sphereMat.uniforms.uColor.value.setRGB(currentColorR, currentColorG, currentColorB)
+      sphereMat.uniforms.uBrightness.value = currentBrightness
 
-      // Flicker
-      if (cfg.flicker) {
-        flickerOffset = (Math.random() - 0.5) * 0.15
-      } else {
-        flickerOffset = lerp(flickerOffset, 0, 0.1)
-      }
-      const flickeredBrightness = Math.max(0, Math.min(1, currentBrightness + flickerOffset))
+      // Sphere slow rotation
+      sphere.rotation.y += 0.002 * currentSphereSpeed
+      sphere.rotation.x += 0.001 * currentSphereSpeed
 
-      // ── Clear ─────────────────────────────────────────────────────────────
-      ctx.clearRect(0, 0, size, size)
+      // Update bloom
+      bloomPass.strength = currentBloom + vol * 0.8
 
-      // ── 1. Background grid ─────────────────────────────────────────────────
-      drawBackgroundGrid(
-        ctx, cx, cy,
-        RING3_RADIUS * scale * 1.15,
-        BACKGROUND_GRID_RINGS,
-        color,
-        BACKGROUND_GRID_ALPHA * flickeredBrightness,
-      )
-
-      // ── 2. Particles ───────────────────────────────────────────────────────
-      updateParticles(particles, st, vol)
-      drawParticles(ctx, particles, cx, cy, scale, color, flickeredBrightness * 0.85)
-
-      // ── 3. Rotating rings ──────────────────────────────────────────────────
-      ctx.save()
-      ctx.globalCompositeOperation = 'screen'
-
-      RING_DEFS.forEach((ring, i) => {
-        // Individual ring speed lerp
-        ringSpeedMults[i] = lerp(ringSpeedMults[i], currentRingSpeedMult, RING_SPEED_LERP_RATE)
-
-        // Error state: add slight jitter
-        const jitter = st === 'error' ? (Math.random() - 0.5) * 0.04 : 0
-
-        ringAngles[i] += ring.direction * ring.baseSpeed * ringSpeedMults[i] + jitter
-
-        const ringAlpha = (0.5 + vol * 0.5) * flickeredBrightness
-
-        drawRing(
-          ctx,
-          cx, cy,
-          ring.radius * scale,
-          ring.segments,
-          ring.gapFraction,
-          ringAngles[i],
-          color,
-          ringAlpha,
-          ring.lineWidth * scale,
-          ring.glowSize * scale,
-        )
+      // Update rings
+      rings.forEach((ring, i) => {
+        const def = RING_DEFS[i]
+        ring.rotation.y += def.speed * 0.016
+        const mat = ring.material as THREE.MeshBasicMaterial
+        mat.opacity = currentRingOpacity + vol * 0.3
+        mat.color.setRGB(currentColorR, currentColorG, currentColorB)
       })
 
-      ctx.restore()
+      // Update particles
+      points.rotation.y += 0.0005
+      particleMat.opacity = 0.4 + vol * 0.4
+      particleMat.color.setRGB(currentColorR, currentColorG, currentColorB)
 
-      // ── 4. Scan line ────────────────────────────────────────────────────────
-      const scanSpeed = SCAN_LINE_BASE_SPEED * cfg.scanLineMult
-      scanAngle += scanSpeed
-
-      const scanAlpha = flickeredBrightness * 0.9
-      drawScanLine(
-        ctx,
-        cx, cy,
-        RING3_RADIUS * scale,
-        scanAngle,
-        color,
-        scanAlpha,
-        scale,
-      )
-
-      // ── 5. Central core ────────────────────────────────────────────────────
-      drawCore(ctx, cx, cy, scale, color, vol, flickeredBrightness)
+      // Render with post-processing
+      composer.render()
 
       rafId = requestAnimationFrame(animate)
     }
 
     rafId = requestAnimationFrame(animate)
 
+    // ── Cleanup ──────────────────────────────────────────────────────────────
     return () => {
       cancelAnimationFrame(rafId)
+      sphereGeo.dispose()
+      sphereMat.dispose()
+      rings.forEach(ring => {
+        ring.geometry.dispose()
+        ;(ring.material as THREE.MeshBasicMaterial).dispose()
+      })
+      particleGeo.dispose()
+      particleMat.dispose()
+      bloomPass.dispose()
+      composer.dispose()
+      renderer.dispose()
     }
-  }, [state, size]) // state in deps → restart on state change; size for canvas resize
+  }, [size])
 
   return (
-    <div
+    <canvas
+      ref={canvasRef}
+      width={size}
+      height={size}
       className={className}
-      style={{
-        width:    size,
-        height:   size,
-        position: 'relative',
-        ...style,
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{
-          width:  size,
-          height: size,
-          display: 'block',
-        }}
-      />
-    </div>
+      style={{ width: size, height: size, display: 'block', ...style }}
+    />
   )
-}
-
-// ─── Core rendering ───────────────────────────────────────────────────────────
-
-function drawCore(
-  ctx:        CanvasRenderingContext2D,
-  cx:         number,
-  cy:         number,
-  scale:      number,
-  color:      string,
-  volume:     number,
-  brightness: number,
-): void {
-  const baseR  = CORE_BASE_RADIUS * scale
-  const maxR   = CORE_MAX_RADIUS  * scale
-  const coreR  = baseR + volume * (maxR - baseR)
-
-  ctx.save()
-  ctx.globalCompositeOperation = 'screen'
-
-  // Layer 1 — wide diffuse glow
-  ctx.globalAlpha = brightness * 0.3
-  ctx.shadowColor = color
-  ctx.shadowBlur  = (30 + volume * 40) * scale
-  ctx.fillStyle   = color
-  ctx.beginPath()
-  ctx.arc(cx, cy, coreR * 1.5, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Layer 2 — medium glow
-  ctx.globalAlpha = brightness * 0.6
-  ctx.shadowBlur  = (15 + volume * 25) * scale
-  ctx.beginPath()
-  ctx.arc(cx, cy, coreR * 1.1, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Layer 3 — bright solid core
-  ctx.globalAlpha = brightness
-  ctx.shadowBlur  = (10 + volume * 20) * scale
-  ctx.fillStyle   = color
-  ctx.beginPath()
-  ctx.arc(cx, cy, coreR, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Inner highlight — tiny bright center spot
-  ctx.globalAlpha = brightness * 0.9
-  ctx.shadowBlur  = 4 * scale
-  ctx.fillStyle   = '#ffffff'
-  ctx.beginPath()
-  ctx.arc(cx, cy, coreR * 0.35, 0, Math.PI * 2)
-  ctx.fill()
-
-  ctx.restore()
 }
