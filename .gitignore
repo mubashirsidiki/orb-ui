@@ -5,3 +5,5 @@ dist
 demo/node_modules
 demo/dist
 volume-debug.log
+package-lock.json
+demo/package-lock.json
