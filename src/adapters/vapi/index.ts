@@ -14,6 +14,7 @@ interface VapiClient {
   removeListener(event: string, listener: (...args: unknown[]) => void): void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   start(...args: any[]): Promise<unknown>
+  stop(): void
 }
 
 interface VapiMessage {
@@ -92,9 +93,16 @@ function makeStateEmitter(onStateChange: (s: OrbState) => void) {
  * Volume: raw Vapi values are normalized (noise gate + EMA) before being
  * passed to onVolumeChange, so themes receive a clean 0–1 signal.
  *
- * @param client - A Vapi instance from @vapi-ai/web
+ * @param client  - A Vapi instance from @vapi-ai/web
+ * @param options - Optional config (e.g. assistantId to pass to vapi.start())
  */
-export function createVapiAdapter(client: VapiClient): OrbAdapter {
+
+interface VapiAdapterOptions {
+  /** Assistant ID passed to vapi.start() when the orb is clicked. */
+  assistantId?: string
+}
+
+export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptions): OrbAdapter {
   // ── Per-adapter EMA state ────────────────────────────────────────────────
   // Kept inside the factory so multiple adapter instances never share state.
   let emaVol = 0
@@ -129,6 +137,14 @@ export function createVapiAdapter(client: VapiClient): OrbAdapter {
   }
 
   return {
+    async start() {
+      await client.start(options?.assistantId)
+    },
+
+    stop() {
+      client.stop()
+    },
+
     subscribe({ onStateChange, onVolumeChange }: AdapterCallbacks) {
       const { emitState, clearTimer } = makeStateEmitter(onStateChange)
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import Vapi from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
 import { VoiceOrb } from 'orb-ui'
@@ -16,7 +16,9 @@ const THEMES: OrbTheme[] = ['debug','circle','bars']
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 const vapi        = VAPI_PUBLIC_KEY ? new Vapi(VAPI_PUBLIC_KEY) : null
-const vapiAdapter = vapi ? createVapiAdapter(vapi) : undefined
+const vapiAdapter = vapi
+  ? createVapiAdapter(vapi, { assistantId: VAPI_ASSISTANT_ID })
+  : undefined
 const elAdapter   = EL_AGENT_ID
   ? createElevenLabsAdapter(Conversation, { agentId: EL_AGENT_ID })
   : undefined
@@ -27,18 +29,12 @@ import { VoiceOrb } from "orb-ui"
 import { createVapiAdapter } from "orb-ui/adapters"
 
 const vapi = new Vapi("your-public-key")
+const adapter = createVapiAdapter(vapi, {
+  assistantId: "your-assistant-id"
+})
 
 function App() {
-  const adapter = createVapiAdapter(vapi)
-
-  return (
-    <VoiceOrb
-      adapter={adapter}
-      theme="circle"
-      onStart={() => vapi.start("your-assistant-id")}
-      onStop={() => vapi.stop()}
-    />
-  )
+  return <VoiceOrb adapter={adapter} theme="circle" />
 }`
 
 const EL_CODE = `import { Conversation } from "@elevenlabs/client"
@@ -50,14 +46,7 @@ const adapter = createElevenLabsAdapter(Conversation, {
 })
 
 function App() {
-  return (
-    <VoiceOrb
-      adapter={adapter}
-      theme="circle"
-      onStart={() => adapter.start()}
-      onStop={() => adapter.stop()}
-    />
-  )
+  return <VoiceOrb adapter={adapter} theme="circle" />
 }`
 
 // ─── Shared button style helper ──────────────────────────────────────────────
@@ -81,8 +70,6 @@ export default function App() {
   const [sandboxState,  setSandboxState]  = useState<OrbState>('idle')
   const [sandboxVolume, setSandboxVolume] = useState(0)
   const [provider,      setProvider]      = useState<'vapi' | 'elevenlabs' | 'sandbox'>('sandbox')
-  const [connected,     setConnected]     = useState(false)
-  const [lastError,     setLastError]     = useState<string | null>(null)
   const [copied,        setCopied]        = useState(false)
   const [codeTab,       setCodeTab]       = useState<'vapi' | 'elevenlabs'>('vapi')
 
@@ -93,37 +80,6 @@ export default function App() {
   const orbProps = adapter
     ? { adapter }
     : { state: sandboxState, volume: sandboxVolume }
-
-  // Vapi error listener
-  useEffect(() => {
-    if (!vapi) return
-    const handler = (e: unknown) => {
-      const msg = typeof e === 'object' && e !== null ? JSON.stringify(e, null, 2) : String(e)
-      console.error('[orb-ui demo] Vapi error:', msg)
-      setLastError(msg)
-    }
-    vapi.on('error', handler)
-    return () => { vapi.removeListener('error', handler) }
-  }, [])
-
-  const handleStart = useCallback(async () => {
-    setLastError(null)
-    if (provider === 'vapi') {
-      if (!vapi || !VAPI_ASSISTANT_ID) return
-      setConnected(true)
-      await vapi.start(VAPI_ASSISTANT_ID)
-    } else if (provider === 'elevenlabs') {
-      if (!elAdapter) return
-      setConnected(true)
-      await elAdapter.start()
-    }
-  }, [provider])
-
-  const handleStop = useCallback(() => {
-    if (provider === 'vapi')            vapi?.stop()
-    else if (provider === 'elevenlabs') elAdapter?.stop()
-    setConnected(false)
-  }, [provider])
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText('npm install orb-ui')
@@ -160,10 +116,10 @@ export default function App() {
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section style={{ padding: '80px 32px 48px', textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
         <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 700, color: '#fff', lineHeight: 1.2, margin: 0 }}>
-          Beautiful animated UI for voice AI agents.
+          Voice AI UI in one line of code.
         </h1>
         <p style={{ fontSize: 16, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
-          Drop-in React components that respond to your agent's voice in real time. Works with Vapi and ElevenLabs out of the box.
+          The simplest voice AI component library for React. Works with Vapi and ElevenLabs. No config, no boilerplate — just drop it in.
         </p>
         <div style={{
           marginTop: 32, background: '#111', border: '1px solid #222', borderRadius: 8,
@@ -193,8 +149,6 @@ export default function App() {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 320 }}>
           <VoiceOrb
             theme={theme} size={280}
-            onStart={adapter ? handleStart : undefined}
-            onStop={adapter ? handleStop : undefined}
             {...orbProps}
           />
         </div>
@@ -221,7 +175,7 @@ export default function App() {
               { id: 'elevenlabs', label: 'ElevenLabs ⚡', disabled: elMissing },
             ] as const).map(({ id, label, disabled }) => (
               <button key={id}
-                onClick={() => { if (!disabled) { setProvider(id); setConnected(false) } }}
+                onClick={() => { if (!disabled) setProvider(id) }}
                 disabled={disabled}
                 style={btnStyle(provider === id, disabled)}>
                 {label}
@@ -257,23 +211,10 @@ export default function App() {
           </div>
         )}
 
-        {/* Live provider status */}
+        {/* Live provider hint */}
         {provider !== 'sandbox' && (
           <div style={{ marginTop: 16, fontSize: 13, color: '#555', textAlign: 'center' }}>
-            {connected
-              ? '🟢 Connected — click the orb to end the call.'
-              : 'Click the orb to start a live conversation.'}
-          </div>
-        )}
-
-        {/* Error */}
-        {lastError && (
-          <div style={{
-            marginTop: 16, background: '#1a0000', border: '1px solid #5a0000', borderRadius: 6,
-            padding: '10px 14px', fontSize: 11, color: '#ff6b6b',
-            fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-          }}>
-            <strong>Error:</strong>{'\n'}{lastError}
+            Click the orb to start or stop a live conversation.
           </div>
         )}
       </section>

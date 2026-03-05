@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { VoiceOrbProps, OrbState } from './VoiceOrb.types'
 import { DebugTheme } from '../../themes/debug'
 import { CircleTheme } from '../../themes/circle'
@@ -31,15 +31,46 @@ export function VoiceOrb({
   const state: OrbState = stateProp ?? adapterState
   const volume: number = volumeProp ?? adapterVolume
 
+  const isActive = state !== 'idle' && state !== 'disconnected' && state !== 'error'
+
+  const handleClick = useCallback(() => {
+    if (isActive) {
+      if (onStop) onStop()
+      else adapter?.stop?.()
+    } else {
+      if (onStart) onStart()
+      else adapter?.start?.()
+    }
+  }, [adapter, isActive, onStart, onStop])
+
+  // Only make it clickable if there's a way to handle clicks
+  const clickable = !!(adapter?.start || onStart || onStop)
+
   const themeProps = { state, volume, size, className, style }
 
-  switch (theme) {
-    case 'circle':
-      return <CircleTheme {...themeProps} />
-    case 'bars':
-      return <BarsTheme {...themeProps} />
-    case 'debug':
-    default:
-      return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />
+  const themeElement = (() => {
+    switch (theme) {
+      case 'circle':
+        return <CircleTheme {...themeProps} />
+      case 'bars':
+        return <BarsTheme {...themeProps} />
+      case 'debug':
+      default:
+        return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />
+    }
+  })()
+
+  // Wrap non-debug themes in a clickable container when adapter or callbacks are present
+  if (clickable && theme !== 'debug') {
+    return (
+      <div
+        onClick={handleClick}
+        style={{ cursor: 'pointer', display: 'inline-flex' }}
+      >
+        {themeElement}
+      </div>
+    )
   }
+
+  return themeElement
 }

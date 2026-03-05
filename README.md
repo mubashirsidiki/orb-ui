@@ -1,12 +1,12 @@
 # orb-ui
 
-Beautiful animated UI components for voice AI agents. Drop-in React components that respond to your agent's voice in real time.
+The simplest way to add voice UI to your React app. One install, one component, works with Vapi and ElevenLabs out of the box.
 
 ```jsx
 import { VoiceOrb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
-<VoiceOrb adapter={createVapiAdapter(vapi)} theme="circle" />
+<VoiceOrb adapter={createVapiAdapter(vapi, { assistantId: 'your-id' })} theme="circle" />
 ```
 
 ## Install
@@ -27,18 +27,10 @@ import { VoiceOrb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
 const vapi = new Vapi('your-public-key')
+const adapter = createVapiAdapter(vapi, { assistantId: 'your-assistant-id' })
 
 function App() {
-  const adapter = createVapiAdapter(vapi)
-
-  return (
-    <VoiceOrb
-      adapter={adapter}
-      theme="circle"
-      onStart={() => vapi.start('your-assistant-id')}
-      onStop={() => vapi.stop()}
-    />
-  )
+  return <VoiceOrb adapter={adapter} theme="circle" />
 }
 ```
 
@@ -52,14 +44,7 @@ import { createElevenLabsAdapter } from 'orb-ui/adapters'
 const adapter = createElevenLabsAdapter(Conversation, { agentId: 'your-agent-id' })
 
 function App() {
-  return (
-    <VoiceOrb
-      adapter={adapter}
-      theme="circle"
-      onStart={() => adapter.start()}
-      onStop={() => adapter.stop()}
-    />
-  )
+  return <VoiceOrb adapter={adapter} theme="circle" />
 }
 ```
 
@@ -94,8 +79,8 @@ function App() {
 | `volume` | `number` | `0` | Audio volume, 0–1 (controlled mode) |
 | `adapter` | `OrbAdapter` | — | Provider adapter (manages state + volume automatically) |
 | `size` | `number` | `200` | Size in pixels |
-| `onStart` | `() => void` | — | Called when Start is pressed (debug theme) |
-| `onStop` | `() => void` | — | Called when Stop is pressed (debug theme) |
+| `onStart` | `() => void` | — | Custom start handler (overrides adapter.start()) |
+| `onStop` | `() => void` | — | Custom stop handler (overrides adapter.stop()) |
 
 ## States
 
