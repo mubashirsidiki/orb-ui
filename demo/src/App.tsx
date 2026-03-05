@@ -12,7 +12,7 @@ const EL_AGENT_ID       = import.meta.env.VITE_EL_AGENT_ID       as string
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATES: OrbState[] = ['idle','connecting','listening','thinking','speaking','error','disconnected']
-const THEMES: OrbTheme[] = ['debug','circle','bars','jarvis']
+const THEMES: OrbTheme[] = ['debug','circle','bars']
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 const vapi        = VAPI_PUBLIC_KEY ? new Vapi(VAPI_PUBLIC_KEY) : null
@@ -20,6 +20,60 @@ const vapiAdapter = vapi ? createVapiAdapter(vapi) : undefined
 const elAdapter   = EL_AGENT_ID
   ? createElevenLabsAdapter(Conversation, { agentId: EL_AGENT_ID })
   : undefined
+
+// ─── Code snippets ────────────────────────────────────────────────────────────
+const VAPI_CODE = `import Vapi from "@vapi-ai/web"
+import { VoiceOrb } from "orb-ui"
+import { createVapiAdapter } from "orb-ui/adapters"
+
+const vapi = new Vapi("your-public-key")
+
+function App() {
+  const adapter = createVapiAdapter(vapi)
+
+  return (
+    <VoiceOrb
+      adapter={adapter}
+      theme="circle"
+      onStart={() => vapi.start("your-assistant-id")}
+      onStop={() => vapi.stop()}
+    />
+  )
+}`
+
+const EL_CODE = `import { Conversation } from "@elevenlabs/client"
+import { VoiceOrb } from "orb-ui"
+import { createElevenLabsAdapter } from "orb-ui/adapters"
+
+const adapter = createElevenLabsAdapter(Conversation, {
+  agentId: "your-agent-id"
+})
+
+function App() {
+  return (
+    <VoiceOrb
+      adapter={adapter}
+      theme="circle"
+      onStart={() => adapter.start()}
+      onStop={() => adapter.stop()}
+    />
+  )
+}`
+
+// ─── Shared button style helper ──────────────────────────────────────────────
+function btnStyle(selected: boolean, disabled = false): React.CSSProperties {
+  return {
+    padding: '6px 16px',
+    fontSize: 12,
+    background: selected ? '#fff' : '#111',
+    color: selected ? '#000' : disabled ? '#444' : '#666',
+    border: `1px solid ${selected ? '#fff' : '#222'}`,
+    borderRadius: 4,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.35 : 1,
+    fontFamily: 'inherit',
+  }
+}
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -29,6 +83,8 @@ export default function App() {
   const [provider,      setProvider]      = useState<'vapi' | 'elevenlabs' | 'sandbox'>('sandbox')
   const [connected,     setConnected]     = useState(false)
   const [lastError,     setLastError]     = useState<string | null>(null)
+  const [copied,        setCopied]        = useState(false)
+  const [codeTab,       setCodeTab]       = useState<'vapi' | 'elevenlabs'>('vapi')
 
   const adapter = provider === 'vapi' ? vapiAdapter
                 : provider === 'elevenlabs' ? elAdapter
@@ -69,141 +125,196 @@ export default function App() {
     setConnected(false)
   }, [provider])
 
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText('npm install orb-ui')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [])
+
   const vapiMissing = !VAPI_PUBLIC_KEY || !VAPI_ASSISTANT_ID
   const elMissing   = !EL_AGENT_ID
 
   return (
-    <div style={{ minHeight: '100vh', padding: 40, fontFamily: 'system-ui, sans-serif', background: '#0a0a0a', color: '#fff' }}>
-      <div style={{ maxWidth: 780, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 40 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, color: '#fff', margin: 0 }}>orb-ui</h1>
-          <p style={{ color: '#555', fontSize: 13, margin: 0 }}>Beautiful animated UI for voice AI agents</p>
+      {/* ── Nav ─────────────────────────────────────────────────────────── */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 100,
+        background: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(12px)',
+        padding: '16px 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontWeight: 700, fontSize: 18, color: '#fff' }}>orb-ui</span>
+        <div style={{ display: 'flex', gap: 24 }}>
+          <a href="https://github.com/alexanderqchen/orb-ui" target="_blank" rel="noreferrer"
+            style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#888')}>GitHub</a>
+          <a href="https://www.npmjs.com/package/orb-ui" target="_blank" rel="noreferrer"
+            style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#888')}>npm</a>
+        </div>
+      </nav>
+
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section style={{ padding: '80px 32px 48px', textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
+        <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 700, color: '#fff', lineHeight: 1.2, margin: 0 }}>
+          Beautiful animated UI for voice AI agents.
+        </h1>
+        <p style={{ fontSize: 16, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
+          Drop-in React components that respond to your agent's voice in real time. Works with Vapi and ElevenLabs out of the box.
+        </p>
+        <div style={{
+          marginTop: 32, background: '#111', border: '1px solid #222', borderRadius: 8,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontFamily: 'monospace', fontSize: 14, color: '#aaa',
+        }}>
+          <span>npm install orb-ui</span>
+          <button onClick={handleCopy} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: '#555',
+            fontSize: 13, fontFamily: 'inherit', padding: '2px 6px',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+          >
+            {copied ? 'Copied!' : '📋'}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Demo ────────────────────────────────────────────────────────── */}
+      <section style={{ padding: '48px 32px', maxWidth: 780, margin: '0 auto' }}>
+        <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', textAlign: 'center', marginBottom: 32 }}>
+          LIVE DEMO
         </div>
 
-        {/* Provider selector */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
-          {([
-            { id: 'sandbox',    label: '🧪 Sandbox',    disabled: false },
-            { id: 'vapi',       label: '🎙 Vapi',        disabled: vapiMissing },
-            { id: 'elevenlabs', label: '⚡ ElevenLabs',  disabled: elMissing },
-          ] as const).map(({ id, label, disabled }) => (
-            <button key={id}
-              onClick={() => { if (!disabled) { setProvider(id); setConnected(false) } }}
-              disabled={disabled}
-              style={{
-                padding: '6px 14px', fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.05em', textTransform: 'uppercase',
-                background: provider === id ? '#fff' : '#1a1a1a',
-                color: provider === id ? '#000' : disabled ? '#333' : '#555',
-                border: `1px solid ${provider === id ? '#fff' : '#333'}`,
-                borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.4 : 1,
-              }}
-            >{label}</button>
-          ))}
-        </div>
-
-        {/* Orb */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 40, minHeight: 260 }}>
+        {/* Orb display */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 320 }}>
           <VoiceOrb
-            theme={theme} size={240}
+            theme={theme} size={280}
             onStart={adapter ? handleStart : undefined}
             onStop={adapter ? handleStop : undefined}
             {...orbProps}
           />
         </div>
 
-        {/* Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Theme switcher */}
+        <div style={{ marginTop: 32, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', marginBottom: 8 }}>THEME</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+            {THEMES.map(t => (
+              <button key={t} onClick={() => setTheme(t)} style={btnStyle(theme === t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {/* Theme */}
-          <div>
-            <label style={{ fontSize: 11, color: '#555', letterSpacing: '0.08em', display: 'block', marginBottom: 8 }}>THEME</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {THEMES.map((t) => (
-                <button key={t} onClick={() => setTheme(t)} style={{
-                  padding: '6px 14px', fontSize: 12,
-                  background: theme === t ? '#fff' : '#1a1a1a',
-                  color: theme === t ? '#000' : '#888',
-                  border: `1px solid ${theme === t ? '#fff' : '#333'}`,
-                  borderRadius: 4, cursor: 'pointer',
-                }}>{t}</button>
+        {/* Provider switcher */}
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', marginBottom: 8 }}>PROVIDER</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+            {([
+              { id: 'sandbox',    label: 'Sandbox 🧪', disabled: false },
+              { id: 'vapi',       label: 'Vapi 🎙',    disabled: vapiMissing },
+              { id: 'elevenlabs', label: 'ElevenLabs ⚡', disabled: elMissing },
+            ] as const).map(({ id, label, disabled }) => (
+              <button key={id}
+                onClick={() => { if (!disabled) { setProvider(id); setConnected(false) } }}
+                disabled={disabled}
+                style={btnStyle(provider === id, disabled)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Sandbox controls */}
+        {provider === 'sandbox' && (
+          <div style={{
+            marginTop: 24, padding: '20px 24px', background: '#111',
+            border: '1px solid #1e1e1e', borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', marginBottom: 16 }}>PLAYGROUND</div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {STATES.map(s => (
+                <button key={s} onClick={() => setSandboxState(s)} style={btnStyle(sandboxState === s)}>
+                  {s}
+                </button>
               ))}
             </div>
-          </div>
 
-          {/* Sandbox controls */}
-          {provider === 'sandbox' && (<>
             <div>
-              <label style={{ fontSize: 11, color: '#555', letterSpacing: '0.08em', display: 'block', marginBottom: 8 }}>STATE</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {STATES.map((s) => (
-                  <button key={s} onClick={() => setSandboxState(s)} style={{
-                    padding: '6px 14px', fontSize: 12,
-                    background: sandboxState === s ? '#fff' : '#1a1a1a',
-                    color: sandboxState === s ? '#000' : '#888',
-                    border: `1px solid ${sandboxState === s ? '#fff' : '#333'}`,
-                    borderRadius: 4, cursor: 'pointer',
-                  }}>{s}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#555', letterSpacing: '0.08em', display: 'block', marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', display: 'block', marginBottom: 8 }}>
                 VOLUME — {sandboxVolume.toFixed(2)}
               </label>
               <input type="range" min={0} max={1} step={0.01} value={sandboxVolume}
-                onChange={(e) => setSandboxVolume(parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: '#00d4ff' }} />
+                onChange={e => setSandboxVolume(parseFloat(e.target.value))}
+                style={{ width: '100%', accentColor: '#4f9eff' }} />
             </div>
-          </>)}
+          </div>
+        )}
 
-          {/* Live mode status */}
-          {provider !== 'sandbox' && (
-            <div style={{ fontSize: 12, color: '#555' }}>
-              {connected
-                ? `🟢 Connected to ${provider === 'vapi' ? 'Vapi (Riley)' : 'ElevenLabs (Alexis)'}. Click the orb to end the call.`
-                : `⚪ Click the orb to start a live call with ${provider === 'vapi' ? 'Riley (Vapi)' : 'Alexis (ElevenLabs)'}.`}
-            </div>
-          )}
+        {/* Live provider status */}
+        {provider !== 'sandbox' && (
+          <div style={{ marginTop: 16, fontSize: 13, color: '#555', textAlign: 'center' }}>
+            {connected
+              ? '🟢 Connected — click the orb to end the call.'
+              : 'Click the orb to start a live conversation.'}
+          </div>
+        )}
 
-          {/* Error */}
-          {lastError && (
-            <div style={{
-              background: '#1a0000', border: '1px solid #5a0000', borderRadius: 6,
-              padding: '10px 14px', fontSize: 11, color: '#ff6b6b',
-              fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-            }}>
-              <strong>Error:</strong>{'\n'}{lastError}
-            </div>
-          )}
+        {/* Error */}
+        {lastError && (
+          <div style={{
+            marginTop: 16, background: '#1a0000', border: '1px solid #5a0000', borderRadius: 6,
+            padding: '10px 14px', fontSize: 11, color: '#ff6b6b',
+            fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+          }}>
+            <strong>Error:</strong>{'\n'}{lastError}
+          </div>
+        )}
+      </section>
 
+      {/* ── Code ────────────────────────────────────────────────────────── */}
+      <section style={{ padding: '48px 32px', maxWidth: 640, margin: '0 auto' }}>
+        <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', marginBottom: 24, textAlign: 'center' }}>
+          QUICK START
         </div>
 
-        {/* Usage snippet */}
-        <div style={{ marginTop: 48, padding: '20px 24px', background: '#111', borderRadius: 8, border: '1px solid #222' }}>
-          <div style={{ fontSize: 11, color: '#555', marginBottom: 10, letterSpacing: '0.08em' }}>USAGE</div>
-          <pre style={{ fontSize: 12, color: '#aaa', margin: 0, lineHeight: 1.6, overflow: 'auto' }}>{`import { Conversation } from '@elevenlabs/client'
-import { VoiceOrb } from 'orb-ui'
-import { createElevenLabsAdapter } from 'orb-ui/adapters'
-
-const adapter = createElevenLabsAdapter(Conversation, { agentId: 'your-agent-id' })
-
-function App() {
-  return (
-    <VoiceOrb
-      adapter={adapter}
-      theme="circle"
-      onStart={() => adapter.start()}
-      onStop={() => adapter.stop()}
-    />
-  )
-}`}</pre>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button onClick={() => setCodeTab('vapi')} style={btnStyle(codeTab === 'vapi')}>Vapi</button>
+          <button onClick={() => setCodeTab('elevenlabs')} style={btnStyle(codeTab === 'elevenlabs')}>ElevenLabs</button>
         </div>
 
-      </div>
+        <pre style={{
+          background: '#111', border: '1px solid #1e1e1e', borderRadius: 8,
+          padding: '20px 24px', fontFamily: 'monospace', fontSize: 13,
+          color: '#ccc', lineHeight: 1.7, overflowX: 'auto', whiteSpace: 'pre', margin: 0,
+        }}>
+          {codeTab === 'vapi' ? VAPI_CODE : EL_CODE}
+        </pre>
+      </section>
+
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer style={{
+        padding: 32, textAlign: 'center', borderTop: '1px solid #111', marginTop: 32,
+        fontSize: 13, color: '#555',
+      }}>
+        <div>MIT License · Built by Alexander Chen</div>
+        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 16 }}>
+          <a href="https://github.com/alexanderqchen/orb-ui" target="_blank" rel="noreferrer"
+            style={{ color: '#555', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>GitHub</a>
+          <a href="https://www.npmjs.com/package/orb-ui" target="_blank" rel="noreferrer"
+            style={{ color: '#555', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>npm</a>
+        </div>
+      </footer>
     </div>
   )
 }

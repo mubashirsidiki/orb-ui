@@ -3,7 +3,6 @@ import type { VoiceOrbProps, OrbState } from './VoiceOrb.types'
 import { DebugTheme } from '../../themes/debug'
 import { CircleTheme } from '../../themes/circle'
 import { BarsTheme } from '../../themes/bars'
-import { JarvisTheme } from '../../themes/jarvis'
 
 export function VoiceOrb({
   state: stateProp,
@@ -39,8 +38,6 @@ export function VoiceOrb({
       return <CircleTheme {...themeProps} />
     case 'bars':
       return <BarsTheme {...themeProps} />
-    case 'jarvis':
-      return <JarvisTheme {...themeProps} />
     case 'debug':
     default:
       return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />

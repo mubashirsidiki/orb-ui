@@ -7,7 +7,7 @@ export type OrbState =
   | 'error'
   | 'disconnected'
 
-export type OrbTheme = 'debug' | 'circle' | 'bars' | 'jarvis'
+export type OrbTheme = 'debug' | 'circle' | 'bars'
 
 export interface OrbAdapter {
   /**

@@ -1,1 +1,0 @@
-export { JarvisTheme } from './JarvisTheme'
