@@ -5,10 +5,10 @@
 Orb is an open source React component library that provides a beautiful, animated visual layer for voice AI agents. A developer should be able to add a stunning voice AI UI to their app in 2 lines of code.
 
 ```jsx
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
-<VoiceOrb adapter={createVapiAdapter(client)} theme="jarvis" />
+<Orb adapter={createVapiAdapter(client)} theme="jarvis" />
 ```
 
 ---
@@ -70,7 +70,7 @@ Each adapter:
 For maximum flexibility, Orb also accepts manual control:
 
 ```jsx
-<VoiceOrb
+<Orb
   state="speaking"
   volume={0.72}
   theme="minimal"
@@ -146,7 +146,7 @@ Each sci-fi theme should have distinct animations per state — especially `thin
 For developers who want Orb's integration logic but not its visuals:
 
 ```js
-const { state, volume } = useVoiceOrb({ provider: 'vapi', client })
+const { state, volume } = useOrb({ provider: 'vapi', client })
 ```
 
 This is a secondary priority but important for flexibility and adoption.
@@ -193,7 +193,7 @@ npm install orb-ui
 ```
 orb-ui/
 ├── src/
-│   ├── components/        # VoiceOrb component
+│   ├── components/        # Orb component
 │   ├── themes/            # debug, circle, bars, jarvis, ...
 │   ├── adapters/          # vapi, elevenlabs, pipecat, bland, custom
 │   └── index.ts           # public exports
@@ -203,7 +203,7 @@ orb-ui/
 
 Usage:
 ```jsx
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 ```
 
@@ -220,4 +220,4 @@ import { createVapiAdapter } from 'orb-ui/adapters'
 
 Deferred:
 - Remaining sci-fi themes (hal, glados, pulse)
-- Headless hooks API (`useVoiceOrb`)
+- Headless hooks API (`useOrb`)

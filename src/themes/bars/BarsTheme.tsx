@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react'
-import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
+import type { OrbState } from '../../components/Orb/Orb.types'
 
 interface BarsThemeProps {
   state: OrbState

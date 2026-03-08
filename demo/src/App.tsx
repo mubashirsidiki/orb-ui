@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import Vapi from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter, createElevenLabsAdapter } from 'orb-ui/adapters'
 import type { OrbState, OrbTheme } from 'orb-ui'
 
@@ -25,7 +25,7 @@ const elAdapter   = EL_AGENT_ID
 
 // ─── Code snippets ────────────────────────────────────────────────────────────
 const VAPI_CODE = `import Vapi from "@vapi-ai/web"
-import { VoiceOrb } from "orb-ui"
+import { Orb } from "orb-ui"
 import { createVapiAdapter } from "orb-ui/adapters"
 
 const vapi = new Vapi("your-public-key")
@@ -34,11 +34,11 @@ const adapter = createVapiAdapter(vapi, {
 })
 
 function App() {
-  return <VoiceOrb adapter={adapter} theme="circle" />
+  return <Orb adapter={adapter} theme="circle" />
 }`
 
 const EL_CODE = `import { Conversation } from "@elevenlabs/client"
-import { VoiceOrb } from "orb-ui"
+import { Orb } from "orb-ui"
 import { createElevenLabsAdapter } from "orb-ui/adapters"
 
 const adapter = createElevenLabsAdapter(Conversation, {
@@ -46,7 +46,7 @@ const adapter = createElevenLabsAdapter(Conversation, {
 })
 
 function App() {
-  return <VoiceOrb adapter={adapter} theme="circle" />
+  return <Orb adapter={adapter} theme="circle" />
 }`
 
 // ─── Shared button style helper ──────────────────────────────────────────────
@@ -147,7 +147,7 @@ export default function App() {
 
         {/* Orb display */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 320 }}>
-          <VoiceOrb
+          <Orb
             theme={theme} size={280}
             {...orbProps}
           />

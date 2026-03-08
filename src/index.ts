@@ -1,2 +1,2 @@
-export { VoiceOrb } from './components/VoiceOrb'
-export type { VoiceOrbProps, OrbState, OrbTheme, OrbAdapter } from './components/VoiceOrb'
+export { Orb } from './components/Orb'
+export type { OrbProps, OrbState, OrbTheme, OrbAdapter } from './components/Orb'

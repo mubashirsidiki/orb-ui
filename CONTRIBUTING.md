@@ -53,7 +53,7 @@ That's it.
 
 ## Ground rules (for everyone)
 
-- Don't break the public API (`VoiceOrb` props, `OrbAdapter` interface, `OrbState` union)
+- Don't break the public API (`Orb` props, `OrbAdapter` interface, `OrbState` union)
 - New themes go in `src/themes/`, new adapters in `src/adapters/`
 - Run `npm run typecheck` and `npm run build` before opening a PR
 - Keep bundle size in mind — no heavy dependencies without discussion

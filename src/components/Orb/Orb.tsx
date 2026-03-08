@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { VoiceOrbProps, OrbState } from './VoiceOrb.types'
+import type { OrbProps, OrbState } from './Orb.types'
 import { DebugTheme } from '../../themes/debug'
 import { CircleTheme } from '../../themes/circle'
 import { BarsTheme } from '../../themes/bars'
 
-export function VoiceOrb({
+export function Orb({
   state: stateProp,
   volume: volumeProp,
   adapter,
@@ -14,7 +14,7 @@ export function VoiceOrb({
   style,
   onStart,
   onStop,
-}: VoiceOrbProps) {
+}: OrbProps) {
   const [adapterState, setAdapterState] = useState<OrbState>('idle')
   const [adapterVolume, setAdapterVolume] = useState(0)
 

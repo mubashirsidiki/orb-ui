@@ -1,5 +1,5 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
-import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
+import type { OrbState } from '../../components/Orb/Orb.types'
 
 interface CircleThemeProps {
   state: OrbState

@@ -40,12 +40,12 @@ interface ElevenLabsConversationClass {
 // ─── Extended adapter interface ───────────────────────────────────────────────
 // ElevenLabs callbacks must be injected at startSession() time, so the adapter
 // owns the session lifecycle and exposes start/stop methods. Pass these to
-// VoiceOrb's onStart / onStop props.
+// Orb's onStart / onStop props.
 
 export interface ElevenLabsOrbAdapter extends OrbAdapter {
-  /** Call this from VoiceOrb's onStart prop to begin a conversation. */
+  /** Call this from Orb's onStart prop to begin a conversation. */
   start(): Promise<void>
-  /** Call this from VoiceOrb's onStop prop to end the current conversation. */
+  /** Call this from Orb's onStop prop to end the current conversation. */
   stop(): Promise<void>
 }
 
@@ -87,14 +87,14 @@ function makeEma() {
  *
  * Unlike createVapiAdapter, this adapter owns the session lifecycle because
  * ElevenLabs requires callbacks to be injected at Conversation.startSession()
- * time. Use the returned start() and stop() methods with VoiceOrb's props.
+ * time. Use the returned start() and stop() methods with Orb's props.
  *
  * @param ConversationClass - The Conversation class from @elevenlabs/client
  * @param config            - agentId / signedUrl + any other startSession options
  *
  * @example
  * import { Conversation } from '@elevenlabs/client'
- * import { VoiceOrb } from 'orb-ui'
+ * import { Orb } from 'orb-ui'
  * import { createElevenLabsAdapter } from 'orb-ui/adapters'
  *
  * const adapter = createElevenLabsAdapter(Conversation, {
@@ -103,7 +103,7 @@ function makeEma() {
  *
  * function App() {
  *   return (
- *     <VoiceOrb
+ *     <Orb
  *       adapter={adapter}
  *       theme="circle"
  *       onStart={() => adapter.start()}
@@ -126,7 +126,7 @@ export function createElevenLabsAdapter(
   const emaVad    = makeEma()
 
   // Subscriber registry — supports multiple simultaneous subscribers
-  // (e.g. VoiceOrb + signal monitor both subscribing at the same time)
+  // (e.g. Orb + signal monitor both subscribing at the same time)
   const subscribers = new Set<AdapterCallbacks>()
 
   function emitState(s: OrbState)  { subscribers.forEach(cb => cb.onStateChange(s)) }

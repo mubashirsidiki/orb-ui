@@ -19,14 +19,14 @@ export interface OrbAdapter {
     onVolumeChange: (volume: number) => void // normalized 0–1
   }): () => void
 
-  /** Start the voice session. Called internally by VoiceOrb on click. */
+  /** Start the voice session. Called internally by Orb on click. */
   start?: () => void | Promise<void>
 
-  /** Stop the voice session. Called internally by VoiceOrb on click. */
+  /** Stop the voice session. Called internally by Orb on click. */
   stop?: () => void | Promise<void>
 }
 
-export interface VoiceOrbProps {
+export interface OrbProps {
   /**
    * Current conversation state. Required in controlled mode (no adapter).
    * Overrides adapter state if both are provided.

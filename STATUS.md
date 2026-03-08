@@ -9,7 +9,7 @@
 ## What This Is
 
 `orb-ui` is an open-source React component library that provides an animated visual
-UI layer for voice AI agents. Single component (`<VoiceOrb>`), pluggable themes,
+UI layer for voice AI agents. Single component (`<Orb>`), pluggable themes,
 pluggable provider adapters. MIT license.
 
 **Owner:** Alexander Chen ([@alexanderqchen](https://github.com/alexanderqchen))
@@ -23,7 +23,7 @@ pluggable provider adapters. MIT license.
 | Item | Status | Notes |
 |---|---|---|
 | Repo scaffold | ✅ Done | `package.json`, `tsconfig.json`, `vite.config.ts`, `src/` structure |
-| `VoiceOrb` component | ✅ Done | `src/components/VoiceOrb/VoiceOrb.tsx` — controlled + adapter modes |
+| `Orb` component | ✅ Done | `src/components/Orb/Orb.tsx` — controlled + adapter modes |
 | `debug` theme | ✅ Done | Fully implemented. State display, volume bar, state buttons, Start/Stop |
 | Vapi adapter | ✅ Done | Full event mapping, thinking-state inference, connecting-state intercept, removeListener cleanup |
 | `circle` theme | ✅ Done | Pulse on idle, scale+glow on listening/speaking (volume-driven rAF), spinning dashed ring on thinking |
@@ -50,7 +50,7 @@ ed08e00  demo: add .env.example, .gitignore, allowedHosts config, @vapi-ai/web d
 46645fd  docs: add CONTRIBUTING.md (AI-native contribution policy)
 cd8cc93  docs: add STATUS.md, update README with contributing section
 8c93595  Implement Vapi adapter with full event mapping and thinking state inference
-61b8d8b  Initial scaffold: VoiceOrb component, debug theme, adapter stubs, demo app
+61b8d8b  Initial scaffold: Orb component, debug theme, adapter stubs, demo app
 ```
 
 ---
@@ -75,9 +75,9 @@ cd8cc93  docs: add STATUS.md, update README with contributing section
 orb-ui/
 ├── src/
 │   ├── components/
-│   │   └── VoiceOrb/
-│   │       ├── VoiceOrb.tsx          # Main component (controlled + adapter logic)
-│   │       ├── VoiceOrb.types.ts     # OrbState, OrbTheme, OrbAdapter, VoiceOrbProps
+│   │   └── Orb/
+│   │       ├── Orb.tsx          # Main component (controlled + adapter logic)
+│   │       ├── Orb.types.ts     # OrbState, OrbTheme, OrbAdapter, OrbProps
 │   │       └── index.ts
 │   ├── themes/
 │   │   ├── debug/DebugTheme.tsx      # ✅ Fully implemented
@@ -92,7 +92,7 @@ orb-ui/
 │   │   ├── elevenlabs/index.ts       # 🚧 Stub
 │   │   ├── pipecat/index.ts          # 🚧 Stub
 │   │   └── bland/index.ts            # 🚧 Stub
-│   └── index.ts                      # Public API: exports VoiceOrb + types
+│   └── index.ts                      # Public API: exports Orb + types
 ├── demo/                             # Vite app — wired to Vapi, tested live
 ├── REQUIREMENTS.md                   # Full design spec and decisions
 ├── STATUS.md                         # ← you are here
@@ -107,14 +107,14 @@ orb-ui/
 ## Core API (do not change without good reason)
 
 ```tsx
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
 // Adapter mode (recommended)
-<VoiceOrb adapter={createVapiAdapter(vapiClient)} theme="jarvis" />
+<Orb adapter={createVapiAdapter(vapiClient)} theme="jarvis" />
 
 // Controlled mode (custom integrations)
-<VoiceOrb state="listening" volume={0.7} theme="circle" />
+<Orb state="listening" volume={0.7} theme="circle" />
 ```
 
 ### OrbState union

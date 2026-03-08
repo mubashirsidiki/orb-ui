@@ -1,4 +1,4 @@
-import type { OrbState, OrbAdapter } from '../components/VoiceOrb/VoiceOrb.types'
+import type { OrbState, OrbAdapter } from '../components/Orb/Orb.types'
 
 export type { OrbState, OrbAdapter }
 

@@ -3,10 +3,10 @@
 The simplest way to add voice UI to your React app. One install, one component, works with Vapi and ElevenLabs out of the box.
 
 ```jsx
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
-<VoiceOrb adapter={createVapiAdapter(vapi, { assistantId: 'your-id' })} theme="circle" />
+<Orb adapter={createVapiAdapter(vapi, { assistantId: 'your-id' })} theme="circle" />
 ```
 
 ## Install
@@ -23,14 +23,14 @@ yarn add orb-ui
 
 ```jsx
 import Vapi from '@vapi-ai/web'
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
 
 const vapi = new Vapi('your-public-key')
 const adapter = createVapiAdapter(vapi, { assistantId: 'your-assistant-id' })
 
 function App() {
-  return <VoiceOrb adapter={adapter} theme="circle" />
+  return <Orb adapter={adapter} theme="circle" />
 }
 ```
 
@@ -38,27 +38,27 @@ function App() {
 
 ```jsx
 import { Conversation } from '@elevenlabs/client'
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { createElevenLabsAdapter } from 'orb-ui/adapters'
 
 const adapter = createElevenLabsAdapter(Conversation, { agentId: 'your-agent-id' })
 
 function App() {
-  return <VoiceOrb adapter={adapter} theme="circle" />
+  return <Orb adapter={adapter} theme="circle" />
 }
 ```
 
 ### Controlled mode (custom integration)
 
 ```jsx
-import { VoiceOrb } from 'orb-ui'
+import { Orb } from 'orb-ui'
 import { useState } from 'react'
 
 function App() {
   const [state, setState] = useState('idle')
   const [volume, setVolume] = useState(0)
 
-  return <VoiceOrb state={state} volume={volume} theme="circle" />
+  return <Orb state={state} volume={volume} theme="circle" />
 }
 ```
 

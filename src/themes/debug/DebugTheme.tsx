@@ -1,4 +1,4 @@
-import type { OrbState } from '../../components/VoiceOrb/VoiceOrb.types'
+import type { OrbState } from '../../components/Orb/Orb.types'
 
 interface DebugThemeProps {
   state: OrbState
@@ -106,7 +106,7 @@ export function DebugTheme({
               // In controlled mode, wire onStateChange to your own state.
               onClick={() => {
                 console.warn(
-                  `[orb-ui debug] To force state '${s}', use controlled mode: <VoiceOrb state="${s}" />`
+                  `[orb-ui debug] To force state '${s}', use controlled mode: <Orb state="${s}" />`
                 )
               }}
             >
