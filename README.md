@@ -2,6 +2,16 @@
 
 The simplest way to add voice UI to your React app. One install, one component, works with Vapi and ElevenLabs out of the box.
 
+<p align="center">
+  <a href="https://orb-ui-demo.vercel.app">
+    <img src="assets/demo-circle.jpg" alt="orb-ui demo — circle theme" width="600" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://orb-ui-demo.vercel.app">Live Demo</a> · <a href="https://www.npmjs.com/package/orb-ui">npm</a> · <a href="https://github.com/alexanderqchen/orb-ui">GitHub</a>
+</p>
+
 ```jsx
 import { Orb } from 'orb-ui'
 import { createVapiAdapter } from 'orb-ui/adapters'
