@@ -63,5 +63,12 @@
     "type": "git",
     "url": "https://github.com/alexanderqchen/orb-ui.git"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "typesVersions": {
+    "*": {
+      "adapters": [
+        "./dist/adapters.d.ts"
+      ]
+    }
+  }
 }
