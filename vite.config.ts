@@ -14,7 +14,7 @@ export default defineConfig({
         'orb-ui': resolve(__dirname, 'src/index.ts'),
         'adapters': resolve(__dirname, 'src/adapters/index.ts'),
       },
-      formats: ['es'],
+      formats: ['es', 'cjs'],
     },
     rollupOptions: {
       external: ['react', 'react-dom', 'react/jsx-runtime'],

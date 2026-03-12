@@ -1,18 +1,21 @@
 {
   "name": "orb-ui",
-  "version": "0.1.1",
-  "description": "The simplest voice AI UI component library for React. Works with Vapi and ElevenLabs.",
+  "version": "0.2.0",
+  "description": "The simplest way to add voice UI to your React app. One install, one component, works with Vapi and ElevenLabs out of the box.",
   "type": "module",
+  "main": "./dist/orb-ui.cjs",
   "module": "./dist/orb-ui.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/orb-ui.d.ts",
   "exports": {
     ".": {
       "import": "./dist/orb-ui.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/orb-ui.cjs",
+      "types": "./dist/orb-ui.d.ts"
     },
     "./adapters": {
       "import": "./dist/adapters.js",
-      "types": "./dist/adapters/index.d.ts"
+      "require": "./dist/adapters.cjs",
+      "types": "./dist/adapters.d.ts"
     }
   },
   "files": [
@@ -43,14 +46,19 @@
   },
   "keywords": [
     "voice",
+    "voice-ui",
+    "voice-agent",
     "ai",
     "react",
     "animation",
     "component",
+    "state-machine",
     "vapi",
     "elevenlabs"
   ],
   "license": "MIT",
+  "author": "Alexander Chen",
+  "homepage": "https://orb-ui-demo.vercel.app",
   "repository": {
     "type": "git",
     "url": "https://github.com/alexanderqchen/orb-ui.git"
