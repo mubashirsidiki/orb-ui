@@ -129,7 +129,7 @@ export function BarsTheme({ state, volume, size, className, style, onClick }: Ba
           }
 
           // Uniform lerp — speaking uses lower rate since bars show steps more visibly
-          const rate = state === 'speaking' ? 0.1 : 0.45
+          const rate = state === 'listening' ? 0.45 : 1.0
 
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
         }

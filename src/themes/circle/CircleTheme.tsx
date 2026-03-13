@@ -8,6 +8,7 @@ interface CircleThemeProps {
   className?: string
   style?: React.CSSProperties
   onClick?: () => void
+
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -118,9 +119,14 @@ export function CircleTheme({ state, volume, size, className, style, onClick }: 
         const tScale = currentBaseRef.current + vol * currentRangeRef.current
         const tGlow  = vol * glow
 
-        // Uniform symmetric lerp for smooth 60fps animation
-        currentScaleRef.current += (tScale - currentScaleRef.current) * 0.45
-        currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * 0.45
+        // Lerp for listening only — speaking lerp handled by adapters
+        if (state === 'listening') {
+          currentScaleRef.current += (tScale - currentScaleRef.current) * 0.45
+          currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * 0.45
+        } else {
+          currentScaleRef.current = tScale
+          currentGlowRef.current  = tGlow
+        }
 
         // Color: lerp toward state color (handles state transition fades;
         // avoids CSS transition flicker on rapid speaking↔listening changes)

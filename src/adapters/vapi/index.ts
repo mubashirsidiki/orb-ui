@@ -139,6 +139,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       const onCallEnd = () => {
         callActive = false
         currentState = 'idle'
+        stopVolLoop()
         emitState('idle')
         onVolumeChange(0)
         emaVol = 0
@@ -148,20 +149,45 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         if (!callActive) return
         currentState = 'speaking'
         emitState('speaking')
+        startVolLoop()
       }
 
       const onSpeechEnd = () => {
         if (!callActive) return
+        stopVolLoop()
         currentState = 'listening'
         emitState('listening')
       }
 
+      // ── 60fps interpolation loop ──────────────────────────────────────
+      // Vapi emits volume at ~10Hz. We lerp at 60fps so themes get smooth data.
+      let targetVol = 0
+      let currentVol = 0
+      let volRaf = 0
+
+      const volLoop = () => {
+        if (currentState === 'speaking') {
+          currentVol += (targetVol - currentVol) * 0.1
+          onVolumeChange(currentVol)
+        }
+        volRaf = requestAnimationFrame(volLoop)
+      }
+
+      const startVolLoop = () => {
+        if (!volRaf) volRaf = requestAnimationFrame(volLoop)
+      }
+      const stopVolLoop = () => {
+        if (volRaf) { cancelAnimationFrame(volRaf); volRaf = 0 }
+        currentVol = 0
+        targetVol = 0
+      }
+
       const onVolumeLevel = (volume: number) => {
         // Only use Vapi's volume-level for speaking (AI output)
-        // Apply sigmoid curve here so theme stays clean
+        // Apply sigmoid curve, then set target for the 60fps lerp loop
         if (currentState === 'speaking') {
           const normalized = normalizeVapiVolume(volume)
-          onVolumeChange(normalized / (normalized + 0.3))
+          targetVol = normalized / (normalized + 0.3)
         }
       }
 
@@ -171,6 +197,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
 
       const onError = (error: unknown) => {
         console.error('[orb-ui/vapi] Error:', error)
+        stopVolLoop()
         emitState('error')
         onVolumeChange(0)
         emaVol = 0
