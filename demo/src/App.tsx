@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Vapi from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
 import { Orb } from 'orb-ui'
@@ -87,6 +87,16 @@ export default function App() {
   const adapter = provider === 'vapi' ? vapiAdapter
                 : provider === 'elevenlabs' ? elAdapter
                 : undefined
+
+  // Stop the previous adapter's call when switching providers
+  const prevAdapterRef = useRef(adapter)
+  useEffect(() => {
+    const prev = prevAdapterRef.current
+    if (prev && prev !== adapter) {
+      prev.stop?.()
+    }
+    prevAdapterRef.current = adapter
+  }, [adapter])
 
   const orbProps = adapter
     ? { adapter }

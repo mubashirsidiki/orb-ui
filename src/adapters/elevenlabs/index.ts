@@ -68,19 +68,8 @@ export interface ElevenLabsOrbAdapter extends OrbAdapter {
 // EMA config: lighter than Vapi (EL signal is already clean, less smoothing needed)
 //   attack=0.5 (fast rise), release=0.15 (moderate decay)
 
-const OUTPUT_GAIN   = 2.7
+// Clean slate — no gain, no EMA, just pass raw values through
 const NOISE_FLOOR   = 0.05   // VAD scores below this are silence
-const EMA_ATTACK    = 0.5
-const EMA_RELEASE   = 0.15
-
-function makeEma() {
-  let state = 0
-  return function ema(input: number): number {
-    const rate = input > state ? EMA_ATTACK : EMA_RELEASE
-    state = state + (input - state) * rate
-    return state
-  }
-}
 
 /**
  * Creates an OrbAdapter for ElevenLabs Conversational AI.
@@ -121,10 +110,6 @@ export function createElevenLabsAdapter(
   let volumeInterval:  ReturnType<typeof setInterval> | null = null
   let currentMode:     ElevenLabsMode = 'listening'
 
-  // Per-adapter EMA instances — separate smoothers for output (speaking) and VAD (listening)
-  const emaOutput = makeEma()
-  const emaVad    = makeEma()
-
   // Subscriber registry — supports multiple simultaneous subscribers
   // (e.g. Orb + signal monitor both subscribing at the same time)
   const subscribers = new Set<AdapterCallbacks>()
@@ -137,7 +122,7 @@ export function createElevenLabsAdapter(
     volumeInterval = setInterval(() => {
       if (!conversation) return
       const raw = conversation.getOutputVolume()
-      emitVolume(emaOutput(Math.min(1, raw * OUTPUT_GAIN)))
+      emitVolume(Math.min(raw * 2.0, 1.0))
     }, 33) // ~30 fps
   }
 
@@ -164,15 +149,6 @@ export function createElevenLabsAdapter(
       } else {
         emitState('listening')
         stopVolumePolling()
-        // Volume during listening is driven by onVadScore below
-      }
-    },
-
-    onVadScore: ({ vadScore }) => {
-      // VAD fires continuously during listening — noise gate + EMA, then drive orb
-      if (currentMode === 'listening') {
-        const gated = vadScore < NOISE_FLOOR ? 0 : (vadScore - NOISE_FLOOR) / (1 - NOISE_FLOOR)
-        emitVolume(emaVad(gated))
       }
     },
 

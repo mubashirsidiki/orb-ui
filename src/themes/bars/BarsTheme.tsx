@@ -96,30 +96,17 @@ export function BarsTheme({ state, volume, size, className, style, onClick }: Ba
       const freqScale = state === 'speaking' ? 1.0 : 0.4
 
       const animate = () => {
-        let vol = volumeRef.current
+        const vol = volumeRef.current
 
-        // Match Circle's volume curves
-        if (state === 'listening') {
-          vol = Math.min(vol / 0.5, 1.0)
-          vol = Math.pow(vol, 1.3)
-        } else {
-          vol = vol / (vol + 0.3)
-        }
-
+        // Volume curves are now in the adapters — theme just animates
         const t = Date.now() / 1000
 
         for (let i = 0; i < BAR_COUNT; i++) {
           const osc = 0.5 + 0.15 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
           const targetH = minH + (maxH - minH) * vol * osc
 
-          // Match Circle's lerp: listening symmetric 0.45, speaking asymmetric 0.45/0.3
-          let rate: number
-          if (state === 'listening') {
-            rate = 0.45
-          } else {
-            // Lower lerp than Circle — bars show 10Hz steps more visibly
-            rate = targetH > smoothed.current[i] ? 0.1 : 0.08
-          }
+          // Uniform lerp — speaking uses lower rate since bars show steps more visibly
+          const rate = state === 'speaking' ? 0.1 : 0.45
 
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
         }

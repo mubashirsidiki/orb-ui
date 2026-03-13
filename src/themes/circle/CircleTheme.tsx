@@ -102,33 +102,15 @@ export function CircleTheme({ state, volume, size, className, style, onClick }: 
       const glow  = state === 'speaking' ? SPEAK_GLOW  : LISTEN_GLOW
 
       const animate = () => {
-        let vol = volumeRef.current
+        const vol = volumeRef.current
 
-        // Rescale mic input: real-world range is ~0–0.5, map to full 0–1
-        if (state === 'listening') {
-          vol = Math.min(vol / 0.5, 1.0)
-          vol = Math.pow(vol, 1.3)
-        }
-
-        // Sigmoid curve for speaking — low volumes pop, top compresses
-        // k=0.3: vol 0.1→0.25, 0.3→0.50, 0.5→0.63, 1.0→0.77
-        if (state === 'speaking') vol = vol / (vol + 0.3)
-
-        // Scale + glow: lerp toward vol-derived target
+        // Volume curves are now applied in the adapters — theme just animates
         const tScale = base + vol * range
         const tGlow  = vol * glow
 
-        if (state === 'listening') {
-          // Listening: single smooth lerp
-          currentScaleRef.current += (tScale - currentScaleRef.current) * 0.45
-          currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * 0.45
-        } else {
-          // Speaking: asymmetric — snap up fast, smooth decay
-          const scaleRate = tScale > currentScaleRef.current ? 0.45 : 0.3
-          const glowRate  = tGlow  > currentGlowRef.current  ? 0.45 : 0.3
-          currentScaleRef.current += (tScale - currentScaleRef.current) * scaleRate
-          currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * glowRate
-        }
+        // Uniform symmetric lerp for smooth 60fps animation
+        currentScaleRef.current += (tScale - currentScaleRef.current) * 0.45
+        currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * 0.45
 
         // Color: lerp toward state color (handles state transition fades;
         // avoids CSS transition flicker on rapid speaking↔listening changes)

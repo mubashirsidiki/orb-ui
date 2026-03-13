@@ -114,81 +114,6 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
     return emaVol
   }
 
-  // ── Mic volume monitoring ─────────────────────────────────────────────────
-  // Vapi's volume-level event only reports AI output volume, not user mic input.
-  // We use the Web Audio API to read mic volume during the listening state.
-  let latestAudioStream: MediaStream | null = null
-  let micContext: AudioContext | null = null
-  let micAnalyser: AnalyserNode | null = null
-  let micSource: MediaStreamAudioSourceNode | null = null
-  let micRaf: number = 0
-  let micEma = 0
-
-  if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-    const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
-    navigator.mediaDevices.getUserMedia = async (constraints) => {
-      const stream = await _origGUM(constraints)
-      if (constraints?.audio) latestAudioStream = stream
-      return stream
-    }
-  }
-
-  function startMicMonitor(onVolumeChange: (v: number) => void) {
-    if (!latestAudioStream || micAnalyser) return
-
-    try {
-      micContext = new AudioContext()
-      micAnalyser = micContext.createAnalyser()
-      micAnalyser.fftSize = 256
-      micSource = micContext.createMediaStreamSource(latestAudioStream)
-      micSource.connect(micAnalyser)
-
-      const dataArray = new Uint8Array(micAnalyser.frequencyBinCount)
-
-      const poll = () => {
-        if (!micAnalyser) return
-        micAnalyser.getByteFrequencyData(dataArray)
-
-        // RMS of frequency bins, normalized to 0–1
-        let sum = 0
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i]
-        const rms = Math.sqrt(sum / dataArray.length) / 255
-
-        // EMA smoothing — fast attack, moderate release for reactive feel
-        const rate = rms > micEma ? 0.7 : 0.3
-        micEma += (rms - micEma) * rate
-
-        onVolumeChange(micEma)
-        micRaf = requestAnimationFrame(poll)
-      }
-      micRaf = requestAnimationFrame(poll)
-    } catch (e) {
-      console.warn('[orb-ui/vapi] Mic monitor failed:', e)
-    }
-  }
-
-  function stopMicMonitor() {
-    cancelAnimationFrame(micRaf)
-    micRaf = 0
-    micEma = 0
-    micSource?.disconnect()
-    micSource = null
-    micAnalyser = null
-    // Don't close micContext — reuse it across listening/speaking transitions
-  }
-
-  function releaseMic() {
-    stopMicMonitor()
-    if (micContext) {
-      micContext.close().catch(() => {})
-      micContext = null
-    }
-    latestAudioStream?.getTracks().forEach(track => {
-      if (track.readyState === 'live') track.stop()
-    })
-    latestAudioStream = null
-  }
-
   return {
     async start() {
       await client.start(options?.assistantId)
@@ -205,46 +130,39 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       let currentState: OrbState = 'idle'
       let callActive = false
 
-      // Mic volume callback — only passes through when listening
-      const onMicVolume = (v: number) => {
-        if (currentState === 'listening') onVolumeChange(v)
-      }
-
       const onCallStart  = () => {
         callActive = true
         currentState = 'listening'
         emitState('listening')
-        // Small delay to let Vapi's getUserMedia complete before we tap the stream
-        setTimeout(() => startMicMonitor(onMicVolume), 500)
       }
 
       const onCallEnd = () => {
         callActive = false
         currentState = 'idle'
-        stopMicMonitor()
         emitState('idle')
         onVolumeChange(0)
         emaVol = 0
-        releaseMic()
       }
 
       const onSpeechStart = () => {
         if (!callActive) return
         currentState = 'speaking'
-        stopMicMonitor()
         emitState('speaking')
       }
 
       const onSpeechEnd = () => {
         if (!callActive) return
         currentState = 'listening'
-        emitState('listening')   // debounced — may be suppressed if speaking fires again quickly
-        startMicMonitor(onMicVolume)
+        emitState('listening')
       }
 
       const onVolumeLevel = (volume: number) => {
         // Only use Vapi's volume-level for speaking (AI output)
-        if (currentState === 'speaking') onVolumeChange(normalizeVapiVolume(volume))
+        // Apply sigmoid curve here so theme stays clean
+        if (currentState === 'speaking') {
+          const normalized = normalizeVapiVolume(volume)
+          onVolumeChange(normalized / (normalized + 0.3))
+        }
       }
 
       const onMessage = (_message: VapiMessage) => {
@@ -256,7 +174,6 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         emitState('error')
         onVolumeChange(0)
         emaVol = 0
-        releaseMic()
       }
 
       client.on('call-start',   onCallStart)
@@ -284,7 +201,6 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         client.removeListener('message',      onMessage as (...args: unknown[]) => void)
         client.removeListener('error',        onError as (...args: unknown[]) => void)
         client.start = originalStart
-        releaseMic()
       }
     },
   }
