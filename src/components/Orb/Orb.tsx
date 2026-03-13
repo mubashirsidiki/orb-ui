@@ -98,6 +98,11 @@ export function Orb({
   const micActiveRef = useRef(false)
 
   useEffect(() => {
+    // Reset state when adapter changes (e.g. provider switch)
+    setAdapterState('idle')
+    setAdapterVolume(0)
+    setMicVolume(0)
+
     if (!adapter) return
     const unsubscribe = adapter.subscribe({
       onStateChange: (s) => {

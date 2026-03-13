@@ -135,7 +135,7 @@ export default function App() {
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '80px 32px 48px', textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
+      <section style={{ padding: '80px 32px 48px', textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
         <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 700, color: '#fff', lineHeight: 1.2, margin: 0 }}>
           Voice AI UI in one line of code.
         </h1>
@@ -161,7 +161,7 @@ export default function App() {
       </section>
 
       {/* ── Demo ────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '48px 32px', maxWidth: 780, margin: '0 auto' }}>
+      <section style={{ padding: '48px 32px', maxWidth: 640, margin: '0 auto' }}>
         <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', textAlign: 'center', marginBottom: 32 }}>
           LIVE DEMO
         </div>
