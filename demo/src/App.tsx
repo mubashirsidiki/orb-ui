@@ -12,7 +12,7 @@ const EL_AGENT_ID       = import.meta.env.VITE_EL_AGENT_ID       as string
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATES: OrbState[] = ['idle','connecting','listening','thinking','speaking','error','disconnected']
-const THEMES: OrbTheme[] = ['debug','circle','bars']
+const THEMES: OrbTheme[] = ['circle','bars','debug']
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 const vapi        = VAPI_PUBLIC_KEY ? new Vapi(VAPI_PUBLIC_KEY) : null
@@ -170,9 +170,9 @@ export default function App() {
           <div style={{ fontSize: 11, color: '#555', letterSpacing: '0.1em', marginBottom: 8 }}>PROVIDER</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
             {([
-              { id: 'sandbox',    label: 'Sandbox 🧪', disabled: false },
               { id: 'vapi',       label: 'Vapi 🎙',    disabled: vapiMissing },
               { id: 'elevenlabs', label: 'ElevenLabs ⚡', disabled: elMissing },
+              { id: 'sandbox',    label: 'Sandbox 🧪', disabled: false },
             ] as const).map(({ id, label, disabled }) => (
               <button key={id}
                 onClick={() => { if (!disabled) setProvider(id) }}
