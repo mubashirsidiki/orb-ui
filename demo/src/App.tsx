@@ -244,7 +244,10 @@ export default function App() {
         padding: 32, textAlign: 'center', borderTop: '1px solid #111', marginTop: 32,
         fontSize: 13, color: '#555',
       }}>
-        <div>MIT License · Built by Alexander Chen</div>
+        <div>MIT License · Built by <a href="https://alexanderqchen.com" target="_blank" rel="noreferrer"
+            style={{ color: '#555', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>Alexander Chen</a></div>
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 16 }}>
           <a href="https://github.com/alexanderqchen/orb-ui" target="_blank" rel="noreferrer"
             style={{ color: '#555', textDecoration: 'none' }}
