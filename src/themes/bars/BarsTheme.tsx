@@ -12,91 +12,115 @@ interface BarsThemeProps {
 const BAR_COUNT = 5
 
 // Traveling wave: all bars share one frequency, evenly phase-shifted left→right.
-// This makes the motion look intentional (a smooth ripple) rather than random.
-const WAVE_FREQ       = 1.4                          // Hz
-const WAVE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT   // evenly spread one full cycle across 5 bars
+const WAVE_FREQ       = 1.4
+const WAVE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT
 
-const STATE_COLORS: Record<OrbState, string> = {
-  idle: '#cccccc',
+// Match Circle's per-state colors
+const STATE_COLORS: Record<string, string> = {
+  idle:       '#cccccc',
   connecting: '#cccccc',
-  listening: '#60a5fa',
-  speaking: '#a3e635',
-  error: '#f87171',
+  listening:  '#999999',
+  speaking:   '#e8e8e8',
+  error:      '#f87171',
 }
 
-function buildKeyframes(size: number) {
-  const maxH = size * 0.55
-  const minH = size * 0.06
-  return `
-@keyframes orb-bars-wave {
-  0%, 100% { height: ${minH}px; }
-  50% { height: ${maxH * 0.5}px; }
-}
-@keyframes orb-bars-wave-fast {
-  0%, 100% { height: ${minH}px; }
-  50% { height: ${maxH * 0.5}px; }
-}
-`
+function hexToRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ]
 }
 
-export function BarsTheme({ state, volume, size, className, style }: BarsThemeProps) {
+export function BarsTheme({ state, volume, size, className, style, onClick }: BarsThemeProps & { onClick?: () => void }) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([])
+  const hoverRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number>(0)
   const smoothed = useRef<number[]>(new Array(BAR_COUNT).fill(0))
-  const styleRef = useRef<HTMLStyleElement | null>(null)
   const volumeRef = useRef(volume)
+  const hoveredRef = useRef(false)
+  const hoverBoostRef = useRef(0)
+  const currentColorRef = useRef<[number, number, number]>(hexToRgb(STATE_COLORS.idle))
 
-  // Sync ref on every volume change — keeps the rAF loop from restarting
   useEffect(() => {
     volumeRef.current = volume
   }, [volume])
-
-  // Inject/update keyframes when size changes
-  useEffect(() => {
-    const id = 'orb-bars-keyframes'
-    let el = document.getElementById(id) as HTMLStyleElement | null
-    if (!el) {
-      el = document.createElement('style')
-      el.id = id
-      document.head.appendChild(el)
-    }
-    el.textContent = buildKeyframes(size)
-    styleRef.current = el
-  }, [size])
 
   // Animation loop
   useEffect(() => {
     const maxH = size * 0.55
     const minH = size * 0.06
-    const barW = size * 0.055
-    const color = STATE_COLORS[state]
+
+    const color = STATE_COLORS[state] ?? STATE_COLORS.idle
+
+    const hoverBoostMax = size * 0.1
+    // Diamond shape: center bar gets full boost, outer bars get less
+    // [0.3, 0.65, 1.0, 0.65, 0.3]
+    const diamondWeights = Array.from({ length: BAR_COUNT }, (_, i) => {
+      const center = (BAR_COUNT - 1) / 2
+      return 1 - 0.7 * (Math.abs(i - center) / center)
+    })
+
+    const updateHoverBoost = () => {
+      const canHover = true
+      const target = (hoveredRef.current && canHover) ? hoverBoostMax : 0
+      hoverBoostRef.current += (target - hoverBoostRef.current) * 0.15
+    }
 
     const setBars = (heights: number[], col: string) => {
+      updateHoverBoost()
+      // Lerp color toward target
+      const tRgb = hexToRgb(col)
+      const [cr, cg, cb] = currentColorRef.current
+      currentColorRef.current = [
+        cr + (tRgb[0] - cr) * 0.08,
+        cg + (tRgb[1] - cg) * 0.08,
+        cb + (tRgb[2] - cb) * 0.08,
+      ]
+      const [r, g, b] = currentColorRef.current.map(Math.round)
+      const lerpedColor = `rgb(${r},${g},${b})`
+
       for (let i = 0; i < BAR_COUNT; i++) {
         const el = barRefs.current[i]
         if (!el) continue
-        el.style.height = `${heights[i]}px`
-        el.style.background = col
+        // Diamond shape on idle, uniform boost on other states
+        const weight = state === 'idle' ? diamondWeights[i] : 1
+        const boost = hoverBoostRef.current * weight
+        el.style.height = `${Math.min(heights[i] + boost, maxH)}px`
+        el.style.background = lerpedColor
         el.style.animation = 'none'
       }
     }
 
     if (state === 'listening' || state === 'speaking') {
-      // Each bar runs its own sine oscillator (unique freq + phase).
-      // Volume scales the amplitude — silence keeps bars low, speech drives them up.
-      // Asymmetric lerp: snap up fast (0.35), decay slowly (0.08) — speech rhythm feels snappy.
-      // Listening uses slower oscillators (÷1.6) for a gentler idle breathing feel.
       const freqScale = state === 'speaking' ? 1.0 : 0.4
 
       const animate = () => {
-        const vol = volumeRef.current
+        let vol = volumeRef.current
+
+        // Match Circle's volume curves
+        if (state === 'listening') {
+          vol = Math.min(vol / 0.5, 1.0)
+          vol = Math.pow(vol, 1.3)
+        } else {
+          vol = vol / (vol + 0.3)
+        }
+
         const t = Date.now() / 1000
 
         for (let i = 0; i < BAR_COUNT; i++) {
-          // Traveling wave — same freq, phase shifts left→right; [0.35, 0.65] range
           const osc = 0.5 + 0.15 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
           const targetH = minH + (maxH - minH) * vol * osc
-          const rate = targetH > smoothed.current[i] ? 0.3 : 0.2
+
+          // Match Circle's lerp: listening symmetric 0.45, speaking asymmetric 0.45/0.3
+          let rate: number
+          if (state === 'listening') {
+            rate = 0.45
+          } else {
+            // Lower lerp than Circle — bars show 10Hz steps more visibly
+            rate = targetH > smoothed.current[i] ? 0.1 : 0.08
+          }
+
           smoothed.current[i] += (targetH - smoothed.current[i]) * rate
         }
 
@@ -108,31 +132,45 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
       return () => cancelAnimationFrame(rafRef.current)
     }
 
-    // CSS-animated or static states
-    cancelAnimationFrame(rafRef.current)
+    // connecting — regular wave animation (loading feel)
+    if (state === 'connecting') {
+      const startTime = Date.now()
+      const animate = () => {
+        const t = (Date.now() - startTime) / 1000
+        updateHoverBoost()
+        for (let i = 0; i < BAR_COUNT; i++) {
+          // Sine hump: 50% sweep, 50% rest — left to right
+          const cycle = (t * 0.6 + i / BAR_COUNT * 0.5) % 1.0
+          const wave = cycle < 0.5
+            ? Math.sin((cycle / 0.5) * Math.PI)
+            : 0
+          const targetH = minH + (maxH * 0.4 - minH) * wave
+          // Lerp from current height into wave for smooth transition from hover
+          smoothed.current[i] += (targetH - smoothed.current[i]) * 0.15
+        }
+        setBars(smoothed.current, color)
+        rafRef.current = requestAnimationFrame(animate)
+      }
+      rafRef.current = requestAnimationFrame(animate)
+      return () => cancelAnimationFrame(rafRef.current)
+    }
 
-    if (state === 'idle' || state === 'connecting') {
-      const duration = state === 'idle' ? '1.8s' : '1s'
+    // idle / error — use rAF so hover boost is responsive
+    cancelAnimationFrame(rafRef.current)
+    const animateStatic = () => {
+      updateHoverBoost()
       for (let i = 0; i < BAR_COUNT; i++) {
         const el = barRefs.current[i]
         if (!el) continue
+        el.style.height = `${minH + hoverBoostRef.current * diamondWeights[i]}px`
         el.style.background = color
-        el.style.height = ''
-        const animName = state === 'idle' ? 'orb-bars-wave' : 'orb-bars-wave-fast'
-        el.style.animation = `${animName} ${duration} ease-in-out ${i * 0.15}s infinite`
+        el.style.animation = 'none'
       }
-      return
+      rafRef.current = requestAnimationFrame(animateStatic)
     }
-
-    // error — static at min height
-    for (let i = 0; i < BAR_COUNT; i++) {
-      const el = barRefs.current[i]
-      if (!el) continue
-      el.style.height = `${minH}px`
-      el.style.background = color
-      el.style.animation = 'none'
-    }
-  }, [state, size])  // volume intentionally excluded — read via volumeRef instead
+    rafRef.current = requestAnimationFrame(animateStatic)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [state, size])
 
   const barW = size * 0.055
   const gap = size * 0.035
@@ -149,25 +187,45 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap,
+        position: 'relative',
         ...style,
       }}
     >
-      {Array.from({ length: BAR_COUNT }, (_, i) => (
-        <div
-          key={i}
-          ref={(el) => { barRefs.current[i] = el }}
-          style={{
-            width: barW,
-            minHeight: minH,
-            maxHeight: maxH,
-            height: minH,
-            borderRadius: radius,
-            background: STATE_COLORS[state],
-            transition: 'background 0.3s ease',
-          }}
-        />
-      ))}
+      <div
+        ref={hoverRef}
+        onClick={onClick}
+        onMouseEnter={() => {
+          hoveredRef.current = true
+          if (hoverRef.current) hoverRef.current.style.filter = 'brightness(1.35)'
+        }}
+        onMouseLeave={() => {
+          hoveredRef.current = false
+          if (hoverRef.current) hoverRef.current.style.filter = 'brightness(1)'
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap,
+          transition: 'filter 0.3s ease',
+          cursor: onClick ? 'pointer' : 'default',
+        }}
+      >
+        {Array.from({ length: BAR_COUNT }, (_, i) => (
+          <div
+            key={i}
+            ref={(el) => { barRefs.current[i] = el }}
+            style={{
+              width: barW,
+              minHeight: minH,
+              maxHeight: maxH,
+              height: minH,
+              borderRadius: radius,
+              background: STATE_COLORS[state] ?? STATE_COLORS.idle,
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }

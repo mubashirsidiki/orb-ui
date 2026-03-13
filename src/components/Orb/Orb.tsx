@@ -59,13 +59,7 @@ export function Orb({
     case 'circle':
       return <CircleTheme {...themeProps} onClick={clickHandler} />
     case 'bars':
-      return clickable ? (
-        <div onClick={handleClick} style={{ cursor: 'pointer', display: 'inline-flex' }}>
-          <BarsTheme {...themeProps} />
-        </div>
-      ) : (
-        <BarsTheme {...themeProps} />
-      )
+      return <BarsTheme {...themeProps} onClick={clickHandler} />
     case 'debug':
     default:
       return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />

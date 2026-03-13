@@ -203,6 +203,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
 
       // Track current state so we can gate volume sources
       let currentState: OrbState = 'idle'
+      let callActive = false
 
       // Mic volume callback — only passes through when listening
       const onMicVolume = (v: number) => {
@@ -210,6 +211,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       }
 
       const onCallStart  = () => {
+        callActive = true
         currentState = 'listening'
         emitState('listening')
         // Small delay to let Vapi's getUserMedia complete before we tap the stream
@@ -217,6 +219,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       }
 
       const onCallEnd = () => {
+        callActive = false
         currentState = 'idle'
         stopMicMonitor()
         emitState('idle')
@@ -226,12 +229,14 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       }
 
       const onSpeechStart = () => {
+        if (!callActive) return
         currentState = 'speaking'
         stopMicMonitor()
         emitState('speaking')
       }
 
       const onSpeechEnd = () => {
+        if (!callActive) return
         currentState = 'listening'
         emitState('listening')   // debounced — may be suppressed if speaking fires again quickly
         startMicMonitor(onMicVolume)
