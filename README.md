@@ -4,7 +4,7 @@ The simplest way to add voice UI to your React app. One install, one component, 
 
 <p align="center">
   <a href="https://orb-ui-demo.vercel.app">
-    <img src="assets/demo-circle.jpg" alt="orb-ui demo — circle theme" width="600" />
+    <img src="assets/demo-screenshot.jpg" alt="orb-ui demo" width="600" />
   </a>
 </p>
 
@@ -80,7 +80,7 @@ function App() {
 |---|---|
 | `debug` | State + volume display with start/stop. Use to verify your integration works. |
 | `circle` | Pulsing circle that reacts to volume. |
-| `bars` | Three bars that animate with voice. |
+| `bars` | Five bars that animate with voice. |
 
 ## Props
 
@@ -96,7 +96,7 @@ function App() {
 
 ## States
 
-`idle` · `connecting` · `listening` · `thinking` · `speaking` · `error` · `disconnected`
+`idle` · `connecting` · `listening` · `speaking` · `error`
 
 ## Supported Providers
 
