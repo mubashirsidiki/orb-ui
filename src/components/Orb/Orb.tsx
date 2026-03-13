@@ -105,14 +105,8 @@ export function Orb({
 
     if (!adapter) return
     const unsubscribe = adapter.subscribe({
-      onStateChange: (s) => {
-        console.log('[orb-ui] state →', s)
-        setAdapterState(s)
-      },
-      onVolumeChange: (v) => {
-        console.log('[orb-ui] volume →', v.toFixed(3))
-        setAdapterVolume(v)
-      },
+      onStateChange: setAdapterState,
+      onVolumeChange: setAdapterVolume,
     })
     return unsubscribe
   }, [adapter])

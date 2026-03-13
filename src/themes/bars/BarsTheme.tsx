@@ -212,6 +212,12 @@ export function BarsTheme({ state, volume, size, className, style, onClick }: Ba
           hoveredRef.current = false
           if (hoverRef.current) hoverRef.current.style.filter = 'brightness(1)'
         }}
+        onTouchEnd={() => {
+          setTimeout(() => {
+            hoveredRef.current = false
+            if (hoverRef.current) hoverRef.current.style.filter = 'brightness(1)'
+          }, 200)
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',

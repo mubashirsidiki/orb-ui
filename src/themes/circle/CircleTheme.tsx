@@ -216,6 +216,15 @@ export function CircleTheme({ state, volume, size, className, style, onClick }: 
             hoverRef.current.style.filter = 'brightness(1)'
           }
         }}
+        onTouchEnd={() => {
+          // Reset hover on mobile — touchend fires but mouseleave doesn't
+          setTimeout(() => {
+            if (hoverRef.current) {
+              hoverRef.current.style.transform = 'scale(1)'
+              hoverRef.current.style.filter = 'brightness(1)'
+            }
+          }, 200)
+        }}
         style={{
           transition: 'transform 0.3s ease, filter 0.3s ease',
           cursor: onClick ? 'pointer' : 'default',

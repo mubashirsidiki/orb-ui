@@ -8,3 +8,4 @@ volume-debug.log
 package-lock.json
 demo/package-lock.json
 demo/.env
+volume-debug.log
