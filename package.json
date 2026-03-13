@@ -1,6 +1,6 @@
 {
   "name": "orb-ui",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The simplest way to add voice UI to your React app. One install, one component, works with Vapi and ElevenLabs out of the box.",
   "type": "module",
   "main": "./dist/orb-ui.cjs",
@@ -58,7 +58,7 @@
   ],
   "license": "MIT",
   "author": "Alexander Chen",
-  "homepage": "https://orb-ui-demo.vercel.app",
+  "homepage": "https://orb-ui.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/alexanderqchen/orb-ui.git"
