@@ -23,8 +23,6 @@ import { createVapiAdapter } from 'orb-ui/adapters'
 
 ```bash
 npm install orb-ui
-# or
-yarn add orb-ui
 ```
 
 > **Note:** Orb uses React hooks internally — in Next.js App Router, use it in a `'use client'` component.
@@ -111,14 +109,14 @@ function App() {
 ```bash
 git clone https://github.com/alexanderqchen/orb-ui.git
 cd orb-ui
-yarn install
-cd demo && yarn install && cd ..
+npm install
+cd demo && npm install && cd ..
 
 # Build the library
-yarn build
+npm run build
 
 # Run demo locally
-cd demo && yarn dev
+cd demo && npm run dev
 ```
 
 ## License
