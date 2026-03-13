@@ -178,7 +178,7 @@ export function createElevenLabsAdapter(
 
     onDisconnect: () => {
       stopVolumePolling()
-      emitState('disconnected')
+      emitState('idle')
       emitVolume(0)
       conversation = null
     },

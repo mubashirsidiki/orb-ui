@@ -84,10 +84,9 @@ function makeStateEmitter(onStateChange: (s: OrbState) => void) {
  * State mapping:
  *   vapi.start() called (intercepted)      → 'connecting'
  *   call-start                             → 'listening'
- *   message (final user transcript)        → 'thinking'
  *   speech-start                           → 'speaking'
  *   speech-end                             → 'listening'  (debounced 350 ms)
- *   call-end                               → 'disconnected'
+ *   call-end                               → 'idle'
  *   error                                  → 'error'
  *
  * Volume: raw Vapi values are normalized (noise gate + EMA) before being
@@ -109,16 +108,21 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
 
   function normalizeVapiVolume(raw: number): number {
     const gated = raw < NOISE_FLOOR ? 0 : (raw - NOISE_FLOOR) / (1 - NOISE_FLOOR)
-    const rate  = gated > emaVol ? 0.65 : 0.12
+    // Light EMA to bridge Vapi's alternating loud/silent artifact
+    const rate  = gated > emaVol ? 0.8 : 0.5
     emaVol      = emaVol + (gated - emaVol) * rate
     return emaVol
   }
 
-  // ── Mic leak prevention ──────────────────────────────────────────────────
-  // Vapi's WebRTC teardown doesn't always release the microphone track,
-  // especially on repeated start/stop cycles. We intercept getUserMedia to
-  // capture the stream reference, then explicitly stop all tracks on call-end.
+  // ── Mic volume monitoring ─────────────────────────────────────────────────
+  // Vapi's volume-level event only reports AI output volume, not user mic input.
+  // We use the Web Audio API to read mic volume during the listening state.
   let latestAudioStream: MediaStream | null = null
+  let micContext: AudioContext | null = null
+  let micAnalyser: AnalyserNode | null = null
+  let micSource: MediaStreamAudioSourceNode | null = null
+  let micRaf: number = 0
+  let micEma = 0
 
   if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
     const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
@@ -129,7 +133,56 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
     }
   }
 
+  function startMicMonitor(onVolumeChange: (v: number) => void) {
+    if (!latestAudioStream || micAnalyser) return
+
+    try {
+      micContext = new AudioContext()
+      micAnalyser = micContext.createAnalyser()
+      micAnalyser.fftSize = 256
+      micSource = micContext.createMediaStreamSource(latestAudioStream)
+      micSource.connect(micAnalyser)
+
+      const dataArray = new Uint8Array(micAnalyser.frequencyBinCount)
+
+      const poll = () => {
+        if (!micAnalyser) return
+        micAnalyser.getByteFrequencyData(dataArray)
+
+        // RMS of frequency bins, normalized to 0–1
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i]
+        const rms = Math.sqrt(sum / dataArray.length) / 255
+
+        // EMA smoothing — fast attack, moderate release for reactive feel
+        const rate = rms > micEma ? 0.7 : 0.3
+        micEma += (rms - micEma) * rate
+
+        onVolumeChange(micEma)
+        micRaf = requestAnimationFrame(poll)
+      }
+      micRaf = requestAnimationFrame(poll)
+    } catch (e) {
+      console.warn('[orb-ui/vapi] Mic monitor failed:', e)
+    }
+  }
+
+  function stopMicMonitor() {
+    cancelAnimationFrame(micRaf)
+    micRaf = 0
+    micEma = 0
+    micSource?.disconnect()
+    micSource = null
+    micAnalyser = null
+    // Don't close micContext — reuse it across listening/speaking transitions
+  }
+
   function releaseMic() {
+    stopMicMonitor()
+    if (micContext) {
+      micContext.close().catch(() => {})
+      micContext = null
+    }
     latestAudioStream?.getTracks().forEach(track => {
       if (track.readyState === 'live') track.stop()
     })
@@ -148,35 +201,49 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
     subscribe({ onStateChange, onVolumeChange }: AdapterCallbacks) {
       const { emitState, clearTimer } = makeStateEmitter(onStateChange)
 
-      const onCallStart  = () => emitState('listening')
+      // Track current state so we can gate volume sources
+      let currentState: OrbState = 'idle'
+
+      // Mic volume callback — only passes through when listening
+      const onMicVolume = (v: number) => {
+        if (currentState === 'listening') onVolumeChange(v)
+      }
+
+      const onCallStart  = () => {
+        currentState = 'listening'
+        emitState('listening')
+        // Small delay to let Vapi's getUserMedia complete before we tap the stream
+        setTimeout(() => startMicMonitor(onMicVolume), 500)
+      }
 
       const onCallEnd = () => {
-        emitState('disconnected')
+        currentState = 'idle'
+        stopMicMonitor()
+        emitState('idle')
         onVolumeChange(0)
         emaVol = 0
         releaseMic()
       }
 
-      const onSpeechStart = () => emitState('speaking')
+      const onSpeechStart = () => {
+        currentState = 'speaking'
+        stopMicMonitor()
+        emitState('speaking')
+      }
 
       const onSpeechEnd = () => {
+        currentState = 'listening'
         emitState('listening')   // debounced — may be suppressed if speaking fires again quickly
-        onVolumeChange(0)
+        startMicMonitor(onMicVolume)
       }
 
       const onVolumeLevel = (volume: number) => {
-        onVolumeChange(normalizeVapiVolume(volume))
+        // Only use Vapi's volume-level for speaking (AI output)
+        if (currentState === 'speaking') onVolumeChange(normalizeVapiVolume(volume))
       }
 
-      const onMessage = (message: VapiMessage) => {
-        if (
-          message.type === 'transcript' &&
-          message.transcriptType === 'final' &&
-          message.role === 'user'
-        ) {
-          emitState('thinking')
-          onVolumeChange(0)
-        }
+      const onMessage = (_message: VapiMessage) => {
+        // Kept as a listener slot for future use (e.g. function-call events).
       }
 
       const onError = (error: unknown) => {

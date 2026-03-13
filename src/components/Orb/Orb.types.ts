@@ -2,10 +2,8 @@ export type OrbState =
   | 'idle'
   | 'connecting'
   | 'listening'
-  | 'thinking'
   | 'speaking'
   | 'error'
-  | 'disconnected'
 
 export type OrbTheme = 'debug' | 'circle' | 'bars'
 

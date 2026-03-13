@@ -11,17 +11,16 @@ interface DebugThemeProps {
 }
 
 const ALL_STATES: OrbState[] = [
-  'idle', 'connecting', 'listening', 'thinking', 'speaking', 'error', 'disconnected',
+  'idle', 'connecting', 'listening', 'speaking', 'error',
 ]
 
 const STATE_COLORS: Record<OrbState, string> = {
   idle: '#888',
   connecting: '#f0c040',
   listening: '#40c0f0',
-  thinking: '#c040f0',
   speaking: '#40f080',
   error: '#f04040',
-  disconnected: '#555',
+
 }
 
 export function DebugTheme({

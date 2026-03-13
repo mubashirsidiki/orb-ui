@@ -11,7 +11,7 @@ const VAPI_ASSISTANT_ID = import.meta.env.VITE_VAPI_ASSISTANT_ID as string
 const EL_AGENT_ID       = import.meta.env.VITE_EL_AGENT_ID       as string
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const STATES: OrbState[] = ['idle','connecting','listening','thinking','speaking','error','disconnected']
+const STATES: OrbState[] = ['idle','connecting','listening','speaking','error']
 const THEMES: OrbTheme[] = ['circle','bars','debug']
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
@@ -49,6 +49,17 @@ function App() {
   return <Orb adapter={adapter} theme="circle" />
 }`
 
+const CUSTOM_CODE = `import { Orb } from "orb-ui"
+import { useState } from "react"
+
+function App() {
+  const [state, setState] = useState("idle")
+  const [volume, setVolume] = useState(0)
+
+  // Connect to any voice provider — just update state and volume
+  return <Orb state={state} volume={volume} theme="circle" />
+}`
+
 // ─── Shared button style helper ──────────────────────────────────────────────
 function btnStyle(selected: boolean, disabled = false): React.CSSProperties {
   return {
@@ -69,9 +80,9 @@ export default function App() {
   const [theme,         setTheme]         = useState<OrbTheme>('circle')
   const [sandboxState,  setSandboxState]  = useState<OrbState>('idle')
   const [sandboxVolume, setSandboxVolume] = useState(0)
-  const [provider,      setProvider]      = useState<'vapi' | 'elevenlabs' | 'sandbox'>('sandbox')
+  const [provider,      setProvider]      = useState<'vapi' | 'elevenlabs' | 'sandbox'>('vapi')
   const [copied,        setCopied]        = useState(false)
-  const [codeTab,       setCodeTab]       = useState<'vapi' | 'elevenlabs'>('vapi')
+  const [codeTab,       setCodeTab]       = useState<'vapi' | 'elevenlabs' | 'custom'>('vapi')
 
   const adapter = provider === 'vapi' ? vapiAdapter
                 : provider === 'elevenlabs' ? elAdapter
@@ -228,6 +239,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button onClick={() => setCodeTab('vapi')} style={btnStyle(codeTab === 'vapi')}>Vapi</button>
           <button onClick={() => setCodeTab('elevenlabs')} style={btnStyle(codeTab === 'elevenlabs')}>ElevenLabs</button>
+          <button onClick={() => setCodeTab('custom')} style={btnStyle(codeTab === 'custom')}>Custom</button>
         </div>
 
         <pre style={{
@@ -235,7 +247,7 @@ export default function App() {
           padding: '20px 24px', fontFamily: 'monospace', fontSize: 13,
           color: '#ccc', lineHeight: 1.7, overflowX: 'auto', whiteSpace: 'pre', margin: 0,
         }}>
-          {codeTab === 'vapi' ? VAPI_CODE : EL_CODE}
+          {codeTab === 'vapi' ? VAPI_CODE : codeTab === 'elevenlabs' ? EL_CODE : CUSTOM_CODE}
         </pre>
       </section>
 

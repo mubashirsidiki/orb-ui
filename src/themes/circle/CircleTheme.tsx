@@ -7,6 +7,7 @@ interface CircleThemeProps {
   size: number
   className?: string
   style?: React.CSSProperties
+  onClick?: () => void
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -24,11 +25,9 @@ function hexToRgb(hex: string): RGB {
 const STATE_COLORS: Record<OrbState, string> = {
   idle:         '#cccccc',
   connecting:   '#cccccc',
-  listening:    '#60a5fa',
-  speaking:     '#a3e635',
-  thinking:     '#fbbf24',
+  listening:    '#999999',
+  speaking:     '#e8e8e8',
   error:        '#f87171',
-  disconnected: '#444444',
 }
 
 // ─── Keyframes ────────────────────────────────────────────────────────────────
@@ -39,12 +38,9 @@ const KEYFRAMES = `
   to   { transform: scale(1.06); }
 }
 @keyframes orb-circle-connecting-pulse {
-  from { transform: scale(1); }
-  to   { transform: scale(1.06); }
-}
-@keyframes orb-circle-thinking-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.6; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
 }
 `
 
@@ -53,20 +49,22 @@ const KEYFRAMES = `
 // applied). These constants only control the visual mapping vol → scale/glow.
 
 // Scale: subtle breathing feel. At vol=0 → SPEAK_BASE; at vol=1 → SPEAK_BASE + SPEAK_RANGE.
-const SPEAK_BASE   = 0.88
-const SPEAK_RANGE  = 0.22   // 0.88 → 1.10
-const LISTEN_BASE  = 0.90
-const LISTEN_RANGE = 0.15   // 0.90 → 1.05
+const SPEAK_BASE   = 0.95
+const SPEAK_RANGE  = 0.08   // 0.95 → 1.03 — subtle size change
+const LISTEN_BASE  = 0.82
+const LISTEN_RANGE = 0.18   // 0.82 → 1.00 (expands toward voice, stays under speaking)
 
-const SPEAK_GLOW   = 16     // px at vol=1
-const LISTEN_GLOW  = 10
+const SPEAK_GLOW   = 24     // px at vol=1 (sigmoid caps effective max ~14px)
+const LISTEN_GLOW  = 0      // no glow during listening — clean edge
 
 // Output lerp rate — interpolates the adapter's ~10 Hz signal up to 60 fps
 // so the circle animates smoothly rather than snapping every 100 ms.
 const LERP = 0.55
 
-export function CircleTheme({ state, volume, size, className, style }: CircleThemeProps) {
+export function CircleTheme({ state, volume, size, className, style, onClick }: CircleThemeProps) {
   const circleRef = useRef<HTMLDivElement>(null)
+  const glowRef   = useRef<HTMLDivElement>(null)
+  const hoverRef  = useRef<HTMLDivElement>(null)
   const rafRef    = useRef<number>(0)
 
   // Sync adapter volume into a ref so the rAF loop always reads the latest
@@ -104,13 +102,33 @@ export function CircleTheme({ state, volume, size, className, style }: CircleThe
       const glow  = state === 'speaking' ? SPEAK_GLOW  : LISTEN_GLOW
 
       const animate = () => {
-        const vol = volumeRef.current
+        let vol = volumeRef.current
+
+        // Rescale mic input: real-world range is ~0–0.5, map to full 0–1
+        if (state === 'listening') {
+          vol = Math.min(vol / 0.5, 1.0)
+          vol = Math.pow(vol, 1.3)
+        }
+
+        // Sigmoid curve for speaking — low volumes pop, top compresses
+        // k=0.3: vol 0.1→0.25, 0.3→0.50, 0.5→0.63, 1.0→0.77
+        if (state === 'speaking') vol = vol / (vol + 0.3)
 
         // Scale + glow: lerp toward vol-derived target
         const tScale = base + vol * range
         const tGlow  = vol * glow
-        currentScaleRef.current += (tScale - currentScaleRef.current) * LERP
-        currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * LERP
+
+        if (state === 'listening') {
+          // Listening: single smooth lerp
+          currentScaleRef.current += (tScale - currentScaleRef.current) * 0.45
+          currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * 0.45
+        } else {
+          // Speaking: asymmetric — snap up fast, smooth decay
+          const scaleRate = tScale > currentScaleRef.current ? 0.45 : 0.3
+          const glowRate  = tGlow  > currentGlowRef.current  ? 0.45 : 0.3
+          currentScaleRef.current += (tScale - currentScaleRef.current) * scaleRate
+          currentGlowRef.current  += (tGlow  - currentGlowRef.current)  * glowRate
+        }
 
         // Color: lerp toward state color (handles state transition fades;
         // avoids CSS transition flicker on rapid speaking↔listening changes)
@@ -125,8 +143,18 @@ export function CircleTheme({ state, volume, size, className, style }: CircleThe
 
         el.style.transform  = `scale(${currentScaleRef.current})`
         el.style.background = `rgb(${r},${g},${b})`
-        el.style.boxShadow  = `0 0 ${currentGlowRef.current}px ${currentGlowRef.current * 0.25}px rgb(${r},${g},${b})`
+        el.style.boxShadow  = 'none'
         el.style.animation  = 'none'
+
+        // Glow on separate element behind the circle — scales with circle
+        const ge = glowRef.current
+        if (ge) {
+          const g2 = currentGlowRef.current
+          ge.style.transform = `scale(${currentScaleRef.current})`
+          ge.style.boxShadow = g2 > 0.5
+            ? `0 0 ${g2}px ${g2 * 0.4}px rgb(${r},${g},${b})`
+            : 'none'
+        }
 
         rafRef.current = requestAnimationFrame(animate)
       }
@@ -147,13 +175,16 @@ export function CircleTheme({ state, volume, size, className, style }: CircleThe
       currentColorRef.current = hexToRgb(STATE_COLORS[state] ?? STATE_COLORS.idle)
 
       el.style.transform  = ''
-      el.style.boxShadow  = ''
-      el.style.background = STATE_COLORS[state] ?? STATE_COLORS.idle
+      el.style.boxShadow  = 'none'
+      if (glowRef.current) glowRef.current.style.boxShadow = 'none'
+      const c = STATE_COLORS[state] ?? STATE_COLORS.idle
+      const [sr, sg, sb] = hexToRgb(c)
+      el.style.background = c
 
       if (state === 'idle') {
         el.style.animation = 'orb-circle-idle-pulse 3s ease-in-out infinite alternate'
       } else if (state === 'connecting') {
-        el.style.animation = 'orb-circle-connecting-pulse 1.2s ease-in-out infinite alternate'
+        el.style.animation = 'orb-circle-connecting-pulse 1.5s ease-in-out infinite'
       } else {
         el.style.animation = 'none'
       }
@@ -173,23 +204,49 @@ export function CircleTheme({ state, volume, size, className, style }: CircleThe
       }}
     >
       <div
-        ref={circleRef}
-        style={{
-          width: d, height: d,
-          borderRadius: '50%',
-          // Initial color — rAF overwrites this immediately on first frame
-          background: STATE_COLORS[state],
+        ref={hoverRef}
+        onClick={onClick}
+        onMouseEnter={() => {
+          if (hoverRef.current) {
+            hoverRef.current.style.transform = 'scale(1.06)'
+            hoverRef.current.style.filter = 'brightness(1.12)'
+          }
         }}
-      />
-      {state === 'thinking' && (
-        <div style={{
-          position: 'absolute',
-          width: size * 0.68, height: size * 0.68,
-          border: '2px dashed #fbbf24', borderRadius: '50%',
-          animation: 'orb-circle-thinking-spin 1.5s linear infinite',
-          pointerEvents: 'none',
-        }} />
-      )}
+        onMouseLeave={() => {
+          if (hoverRef.current) {
+            hoverRef.current.style.transform = 'scale(1)'
+            hoverRef.current.style.filter = 'brightness(1)'
+          }
+        }}
+        style={{
+          transition: 'transform 0.3s ease, filter 0.3s ease',
+          cursor: onClick ? 'pointer' : 'default',
+          borderRadius: '50%',
+          lineHeight: 0,
+        }}
+      >
+        {/* Glow element — behind the circle */}
+        <div
+          ref={glowRef}
+          style={{
+            position: 'absolute',
+            width: d, height: d,
+            borderRadius: '50%',
+            pointerEvents: 'none',
+          }}
+        />
+        {/* Circle — on top */}
+        <div
+          ref={circleRef}
+          style={{
+            position: 'relative',
+            width: d, height: d,
+            borderRadius: '50%',
+            background: STATE_COLORS[state],
+          }}
+        />
+      </div>
+
     </div>
   )
 }

@@ -21,8 +21,14 @@ export function Orb({
   useEffect(() => {
     if (!adapter) return
     const unsubscribe = adapter.subscribe({
-      onStateChange: setAdapterState,
-      onVolumeChange: setAdapterVolume,
+      onStateChange: (s) => {
+        console.log('[orb-ui] state →', s)
+        setAdapterState(s)
+      },
+      onVolumeChange: (v) => {
+        console.log('[orb-ui] volume →', v.toFixed(3))
+        setAdapterVolume(v)
+      },
     })
     return unsubscribe
   }, [adapter])
@@ -31,7 +37,7 @@ export function Orb({
   const state: OrbState = stateProp ?? adapterState
   const volume: number = volumeProp ?? adapterVolume
 
-  const isActive = state !== 'idle' && state !== 'disconnected' && state !== 'error'
+  const isActive = state !== 'idle' && state !== 'error'
 
   const handleClick = useCallback(() => {
     if (isActive) {
@@ -47,30 +53,21 @@ export function Orb({
   const clickable = !!(adapter?.start || onStart || onStop)
 
   const themeProps = { state, volume, size, className, style }
+  const clickHandler = clickable ? handleClick : undefined
 
-  const themeElement = (() => {
-    switch (theme) {
-      case 'circle':
-        return <CircleTheme {...themeProps} />
-      case 'bars':
-        return <BarsTheme {...themeProps} />
-      case 'debug':
-      default:
-        return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />
-    }
-  })()
-
-  // Wrap non-debug themes in a clickable container when adapter or callbacks are present
-  if (clickable && theme !== 'debug') {
-    return (
-      <div
-        onClick={handleClick}
-        style={{ cursor: 'pointer', display: 'inline-flex' }}
-      >
-        {themeElement}
-      </div>
-    )
+  switch (theme) {
+    case 'circle':
+      return <CircleTheme {...themeProps} onClick={clickHandler} />
+    case 'bars':
+      return clickable ? (
+        <div onClick={handleClick} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+          <BarsTheme {...themeProps} />
+        </div>
+      ) : (
+        <BarsTheme {...themeProps} />
+      )
+    case 'debug':
+    default:
+      return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />
   }
-
-  return themeElement
 }

@@ -21,9 +21,7 @@ const STATE_COLORS: Record<OrbState, string> = {
   connecting: '#cccccc',
   listening: '#60a5fa',
   speaking: '#a3e635',
-  thinking: '#fbbf24',
   error: '#f87171',
-  disconnected: '#444444',
 }
 
 function buildKeyframes(size: number) {
@@ -110,21 +108,6 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
       return () => cancelAnimationFrame(rafRef.current)
     }
 
-    if (state === 'thinking') {
-      const animate = () => {
-        const now = Date.now()
-        const heights: number[] = []
-        for (let i = 0; i < BAR_COUNT; i++) {
-          heights.push(minH + (maxH - minH) * 0.5 * (1 + Math.sin(now / 500 + i * 0.8)))
-        }
-        setBars(heights, color)
-        rafRef.current = requestAnimationFrame(animate)
-      }
-      rafRef.current = requestAnimationFrame(animate)
-
-      return () => cancelAnimationFrame(rafRef.current)
-    }
-
     // CSS-animated or static states
     cancelAnimationFrame(rafRef.current)
 
@@ -141,7 +124,7 @@ export function BarsTheme({ state, volume, size, className, style }: BarsThemePr
       return
     }
 
-    // error / disconnected — static at min height
+    // error — static at min height
     for (let i = 0; i < BAR_COUNT; i++) {
       const el = barRefs.current[i]
       if (!el) continue
