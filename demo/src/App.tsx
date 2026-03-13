@@ -137,7 +137,7 @@ export default function App() {
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section style={{ padding: '80px 32px 48px', textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
         <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 700, color: '#fff', lineHeight: 1.2, margin: 0 }}>
-          Voice AI UI in one line of code.
+          Beautiful voice AI in minutes, not days.
         </h1>
         <p style={{ fontSize: 16, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
           The simplest voice AI component library for React. Works with Vapi and ElevenLabs. No config, no boilerplate — just drop it in.

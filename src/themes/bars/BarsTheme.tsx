@@ -42,6 +42,20 @@ export function BarsTheme({ state, volume, size, className, style, onClick }: Ba
   const hoverBoostRef = useRef(0)
   const currentColorRef = useRef<[number, number, number]>(hexToRgb(STATE_COLORS.idle))
 
+  // State transition: blend targets over BLEND_MS so bar heights don't jump
+  const BLEND_MS = 300
+  const blendStartRef = useRef<number | null>(null)
+  const frozenHeightsRef = useRef<number[]>(new Array(BAR_COUNT).fill(0))
+  const prevStateRef = useRef(state)
+
+  useEffect(() => {
+    if (state !== prevStateRef.current) {
+      frozenHeightsRef.current = [...smoothed.current]
+      blendStartRef.current = Date.now()
+      prevStateRef.current = state
+    }
+  }, [state])
+
   useEffect(() => {
     volumeRef.current = volume
   }, [volume])
@@ -103,7 +117,16 @@ export function BarsTheme({ state, volume, size, className, style, onClick }: Ba
 
         for (let i = 0; i < BAR_COUNT; i++) {
           const osc = 0.5 + 0.15 * Math.sin(t * WAVE_FREQ * freqScale * Math.PI * 2 + i * WAVE_PHASE_STEP)
-          const targetH = minH + (maxH - minH) * vol * osc
+          let targetH = minH + (maxH - minH) * vol * osc
+
+          // During state transition, blend the target from frozen heights
+          if (blendStartRef.current !== null) {
+            const elapsed = Date.now() - blendStartRef.current
+            const progress = Math.min(elapsed / BLEND_MS, 1)
+            const ease = 1 - (1 - progress) * (1 - progress)
+            targetH = frozenHeightsRef.current[i] + (targetH - frozenHeightsRef.current[i]) * ease
+            if (progress >= 1) blendStartRef.current = null
+          }
 
           // Uniform lerp — speaking uses lower rate since bars show steps more visibly
           const rate = state === 'speaking' ? 0.1 : 0.45
