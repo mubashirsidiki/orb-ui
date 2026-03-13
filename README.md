@@ -27,6 +27,8 @@ npm install orb-ui
 yarn add orb-ui
 ```
 
+> **Note:** Orb uses React hooks internally — in Next.js App Router, use it in a `'use client'` component.
+
 ## Quick Start
 
 ### With Vapi
