@@ -178,6 +178,9 @@ export function Orb({
       return <BarsTheme {...themeProps} onClick={clickHandler} />
     case 'debug':
     default:
-      return <DebugTheme {...themeProps} onStart={onStart} onStop={onStop} />
+      return <DebugTheme {...themeProps}
+        onStart={onStart ?? (() => adapter?.start?.())}
+        onStop={onStop ?? (() => adapter?.stop?.())}
+      />
   }
 }
