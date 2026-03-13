@@ -78,6 +78,12 @@ export function CircleTheme({ state, volume, size, className, style, onClick }: 
   const currentGlowRef  = useRef(0)
   const currentColorRef = useRef<RGB>(hexToRgb(STATE_COLORS.idle))
 
+  // State transition blending — lerps base/range toward new state's targets
+  // so size changes smoothly between states without affecting volume reactivity
+  const TRANSITION_RATE = 0.06  // ~400ms to settle
+  const currentBaseRef  = useRef(LISTEN_BASE)
+  const currentRangeRef = useRef(LISTEN_RANGE)
+
   // Inject keyframes once
   useEffect(() => {
     const id = 'orb-circle-keyframes'
@@ -104,8 +110,12 @@ export function CircleTheme({ state, volume, size, className, style, onClick }: 
       const animate = () => {
         const vol = volumeRef.current
 
+        // Blend base/range toward current state's targets (smooth state transitions)
+        currentBaseRef.current  += (base  - currentBaseRef.current)  * TRANSITION_RATE
+        currentRangeRef.current += (range - currentRangeRef.current) * TRANSITION_RATE
+
         // Volume curves are now applied in the adapters — theme just animates
-        const tScale = base + vol * range
+        const tScale = currentBaseRef.current + vol * currentRangeRef.current
         const tGlow  = vol * glow
 
         // Uniform symmetric lerp for smooth 60fps animation
