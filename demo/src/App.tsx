@@ -269,7 +269,10 @@ export default function App() {
         <div>MIT License · Built by <a href="https://alexanderqchen.com" target="_blank" rel="noreferrer"
             style={{ color: '#555', textDecoration: 'none' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>Alexander Chen</a></div>
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>Alexander Chen</a> & <a href="https://www.experimental.software/" target="_blank" rel="noreferrer"
+            style={{ color: '#555', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}>Experimental Software</a></div>
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 16 }}>
           <a href="https://github.com/alexanderqchen/orb-ui" target="_blank" rel="noreferrer"
             style={{ color: '#555', textDecoration: 'none' }}
