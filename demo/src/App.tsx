@@ -175,6 +175,52 @@ function useConversationSimulation() {
   return frame
 }
 
+const NAV_LINKS = [
+  { href: '#demo', label: 'Demo' },
+  { href: '#quick-start', label: 'Quick Start' },
+  { href: '#providers', label: 'Providers' },
+  { href: '#themes', label: 'Themes' },
+  { href: 'https://github.com/alexanderqchen/orb-ui', label: 'GitHub', external: true },
+] as const
+
+const SEO_SECTIONS = [
+  {
+    id: 'voice-agent-ui',
+    title: 'Voice agent UI for React',
+    copy: 'Animated voice orbs, audio-reactive feedback, and clear states for React voice agents.',
+    link: '/docs/guides/voice-agent-ui',
+    linkLabel: 'Read the guide',
+  },
+  {
+    id: 'providers',
+    title: 'Provider adapters',
+    copy: 'Use Vapi and ElevenLabs adapters, or control state and volume yourself.',
+    link: '/docs/adapters/vapi',
+    linkLabel: 'Explore adapters',
+  },
+  {
+    id: 'themes',
+    title: 'Themes and voice states',
+    copy: 'Map listening, speaking, idle, and error states into polished visual themes.',
+    link: '/docs/examples/voice-orb-ui',
+    linkLabel: 'View example',
+  },
+  {
+    id: 'custom-integrations',
+    title: 'Custom voice AI integrations',
+    copy: 'Connect WebRTC, WebSocket, telephony, or speech pipelines with controlled mode.',
+    link: '/docs/adapters/custom',
+    linkLabel: 'Build custom UI',
+  },
+  {
+    id: 'roadmap',
+    title: 'OpenAI Realtime + Gemini Live',
+    copy: 'Prototype with controlled mode today; dedicated provider adapters are planned next.',
+    link: '/docs/providers/openai-realtime',
+    linkLabel: 'Preview notes',
+  },
+] as const
+
 function btnStyle(selected: boolean, disabled = false): CSSProperties {
   return {
     padding: '6px 16px',
@@ -298,6 +344,63 @@ export default function App() {
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
+      <style>{`
+        .seo-card {
+          background: #101010;
+          border: 1px solid #1f1f1f;
+          border-radius: 8px;
+          color: inherit;
+          display: flex;
+          flex-direction: column;
+          min-height: 180px;
+          padding: 20px;
+          text-decoration: none;
+          transition:
+            border-color 180ms ease,
+            background 180ms ease,
+            transform 180ms ease;
+        }
+
+        .seo-card:hover,
+        .seo-card:focus-visible {
+          background: #141414;
+          border-color: #3a3a3a;
+          transform: translateY(-2px);
+        }
+
+        .seo-card:focus-visible {
+          outline: 2px solid #d9ecff;
+          outline-offset: 3px;
+        }
+
+        .seo-card__copy {
+          color: #9a9a9a;
+          font-size: 14px;
+          line-height: 1.55;
+          margin: 10px 0 0;
+        }
+
+        .seo-card__link {
+          align-items: center;
+          color: #9fd2ff;
+          display: inline-flex;
+          font-size: 13px;
+          font-weight: 650;
+          gap: 6px;
+          margin-top: auto;
+          padding-top: 18px;
+        }
+
+        .seo-card__arrow {
+          display: inline-block;
+          transition: transform 180ms ease;
+        }
+
+        .seo-card:hover .seo-card__arrow,
+        .seo-card:focus-visible .seo-card__arrow {
+          transform: translateX(4px);
+        }
+      `}</style>
       <nav
         style={{
           position: 'sticky',
@@ -309,31 +412,30 @@ export default function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 24,
+          gap: 16,
+          flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontWeight: 700, fontSize: 18, color: '#fff' }}>orb-ui</span>
-        <div style={{ display: 'flex', gap: 24 }}>
-          <a
-            href="https://github.com/alexanderqchen/orb-ui"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
-          >
-            GitHub
-          </a>
-          <a
-            href="https://www.npmjs.com/package/orb-ui"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
-          >
-            npm
-          </a>
+        <a
+          href="/"
+          style={{ fontWeight: 700, fontSize: 18, color: '#fff', textDecoration: 'none' }}
+        >
+          orb-ui
+        </a>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target={link.external ? '_blank' : undefined}
+              rel={link.external ? 'noreferrer' : undefined}
+              style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
+            >
+              {link.label}
+            </a>
+          ))}
         </div>
       </nav>
 
@@ -349,11 +451,12 @@ export default function App() {
             margin: 0,
           }}
         >
-          Beautiful voice AI in minutes, not days.
+          React voice agent UI components
         </h1>
         <p style={{ fontSize: 16, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
-          A small React orb that responds to conversation state and volume. Use an adapter in
-          production, or control it directly for previews, mocks, and docs.
+          orb-ui is a React voice agent UI library with animated orb components, audio-reactive
+          themes, Vapi and ElevenLabs adapters, and controlled mode for custom realtime voice
+          agents.
         </p>
         <div
           style={{
@@ -391,7 +494,8 @@ export default function App() {
         </div>
       </section>
 
-      <section style={{ padding: '48px 32px', maxWidth: 680, margin: '0 auto' }}>
+      {/* ── Demo ────────────────────────────────────────────────────────── */}
+      <section id="demo" style={{ padding: '48px 32px', maxWidth: 680, margin: '0 auto' }}>
         <div style={{ ...labelStyle, textAlign: 'center', marginBottom: 32 }}>Simulated demo</div>
 
         <div
@@ -492,7 +596,8 @@ export default function App() {
         )}
       </section>
 
-      <section style={{ padding: '48px 32px', maxWidth: 680, margin: '0 auto' }}>
+      {/* ── Code ────────────────────────────────────────────────────────── */}
+      <section id="quick-start" style={{ padding: '48px 32px', maxWidth: 680, margin: '0 auto' }}>
         <div style={{ ...labelStyle, marginBottom: 24, textAlign: 'center' }}>Quick start</div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -533,6 +638,32 @@ export default function App() {
         >
           {codeForTab(codeTab)}
         </pre>
+      </section>
+
+      {/* ── SEO Content ─────────────────────────────────────────────────── */}
+      <section style={{ padding: '16px 32px 32px', maxWidth: 980, margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 14,
+          }}
+        >
+          {SEO_SECTIONS.map((section) => (
+            <a key={section.id} id={section.id} href={section.link} className="seo-card">
+              <h2 style={{ fontSize: 18, color: '#fff', margin: 0, lineHeight: 1.25 }}>
+                {section.title}
+              </h2>
+              <p className="seo-card__copy">{section.copy}</p>
+              <span className="seo-card__link">
+                {section.linkLabel}
+                <span className="seo-card__arrow" aria-hidden="true">
+                  →
+                </span>
+              </span>
+            </a>
+          ))}
+        </div>
       </section>
 
       <footer
