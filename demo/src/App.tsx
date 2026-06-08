@@ -6,6 +6,8 @@ import type { OrbState, OrbTheme } from 'orb-ui'
 // Constants
 const STATES: OrbState[] = ['idle', 'connecting', 'listening', 'speaking', 'error']
 const THEMES: OrbTheme[] = ['circle', 'bars', 'debug']
+const GITHUB_REPO_URL = 'https://github.com/alexanderqchen/orb-ui'
+const GITHUB_STAR_COLOR = '#eab308'
 
 type DemoMode = 'simulation' | 'sandbox'
 type CodeTab = 'vapi' | 'elevenlabs' | 'adapter' | 'controlled'
@@ -176,11 +178,10 @@ function useConversationSimulation() {
 }
 
 const NAV_LINKS = [
-  { href: '#demo', label: 'Demo' },
-  { href: '#quick-start', label: 'Quick Start' },
-  { href: '#adapters', label: 'Adapters' },
-  { href: '#themes', label: 'Themes' },
-  { href: 'https://github.com/alexanderqchen/orb-ui', label: 'GitHub', external: true },
+  { href: '#demo', label: 'Demo', external: false },
+  { href: '#quick-start', label: 'Quick Start', external: false },
+  { href: '#adapters', label: 'Adapters', external: false },
+  { href: '#themes', label: 'Themes', external: false },
 ] as const
 
 const SEO_SECTIONS = [
@@ -241,6 +242,45 @@ const labelStyle: CSSProperties = {
   color: '#555',
   letterSpacing: '0.1em',
   textTransform: 'uppercase',
+}
+
+function githubButtonStyle(): CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: '8px 13px',
+    borderRadius: 999,
+    background: '#fffdf4',
+    color: '#15110a',
+    border: '1px solid #f0d56f',
+    boxShadow: '0 8px 28px rgba(234, 179, 8, 0.14)',
+    fontSize: 13,
+    fontWeight: 750,
+    lineHeight: 1,
+    textDecoration: 'none',
+    transition: 'transform 180ms ease, border-color 180ms ease',
+    whiteSpace: 'nowrap',
+  }
+}
+
+function GitHubStarIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      width="15"
+      height="15"
+      fill="currentColor"
+      style={{
+        color: GITHUB_STAR_COLOR,
+        flexShrink: 0,
+      }}
+    >
+      <path d="M8 .25a.75.75 0 0 1 .673.418l1.88 3.81 4.205.611a.75.75 0 0 1 .416 1.279l-3.043 2.966.718 4.188a.75.75 0 0 1-1.088.79L8 12.335l-3.761 1.977a.75.75 0 0 1-1.088-.79l.718-4.188L.826 6.368a.75.75 0 0 1 .416-1.279l4.206-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+    </svg>
+  )
 }
 
 const volumeTextStyle: CSSProperties = {
@@ -436,6 +476,16 @@ export default function App() {
               {link.label}
             </a>
           ))}
+          <a
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Star orb-ui on GitHub"
+            style={githubButtonStyle()}
+          >
+            <GitHubStarIcon />
+            Star on GitHub
+          </a>
         </div>
       </nav>
 
