@@ -41,16 +41,21 @@ The adapter maps Vapi conversation lifecycle events into orb-ui state changes. T
 - assistant speech
 - errors
 
+Vapi assistant audio levels are emitted as `outputVolume` while the assistant is speaking.
+The Vapi web SDK does not currently expose local microphone input levels through the
+adapter event stream, so this adapter does not emit `inputVolume` while listening. If your
+app already meters the microphone separately, pass a controlled `signal` to `Orb`.
+
 ## Accessibility
 
 When an adapter or `onStart`/`onStop` handler is provided, clickable `circle` and `bars` themes render as `<button type="button">` controls. Pass an `aria-label` when no visible text labels the orb.
 
 ## When to use controlled mode instead
 
-Use controlled mode if your app wraps Vapi in its own session layer or combines Vapi with custom state. The Orb component does not need to own the provider SDK if your app already knows the state and volume.
+Use controlled mode if your app wraps Vapi in its own session layer or combines Vapi with custom state. The Orb component does not need to own the provider SDK if your app already knows the voice signal.
 
 ```tsx
-<Orb state={voiceState} volume={volume} theme="circle" />
+<Orb signal={{ state: voiceState, outputVolume }} theme="circle" />
 ```
 
 ## Positioning

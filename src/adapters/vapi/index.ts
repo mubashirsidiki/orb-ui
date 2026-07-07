@@ -1,4 +1,4 @@
-import type { OrbAdapter, OrbState, AdapterCallbacks } from '../types'
+import type { OrbAdapter, OrbSignal, OrbSignalListener, OrbState } from '../types'
 
 // Minimal interface for the Vapi client from @vapi-ai/web.
 // We define our own so orb-ui doesn't require @vapi-ai/web as a dependency —
@@ -95,8 +95,8 @@ function makeStateEmitter(onStateChange: (s: OrbState) => void) {
  *   call-end                               → 'idle'
  *   error                                  → 'error'
  *
- * Volume: raw Vapi values are normalized (noise gate + EMA) before being
- * passed to onVolumeChange, so themes receive a clean 0–1 signal.
+ * Volume: raw Vapi values are normalized (noise gate + EMA) before being emitted
+ * as outputVolume while the assistant is speaking.
  *
  * @param client  - A Vapi instance from @vapi-ai/web
  * @param options - Optional config (e.g. assistantId to pass to vapi.start())
@@ -108,16 +108,24 @@ interface VapiAdapterOptions {
 }
 
 export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptions): OrbAdapter {
-  // ── Per-adapter EMA state ────────────────────────────────────────────────
-  // Kept inside the factory so multiple adapter instances never share state.
-  let emaVol = 0
+  const startListeners = new Set<() => void>()
+  let originalStart: VapiClient['start'] | null = null
 
-  function normalizeVapiVolume(raw: number): number {
-    const gated = raw < NOISE_FLOOR ? 0 : (raw - NOISE_FLOOR) / (1 - NOISE_FLOOR)
-    // Light EMA to bridge Vapi's alternating loud/silent artifact
-    const rate = gated > emaVol ? 0.8 : 0.5
-    emaVol = emaVol + (gated - emaVol) * rate
-    return emaVol
+  function ensureStartIntercept() {
+    if (originalStart) return
+
+    originalStart = client.start.bind(client)
+    client.start = async (...args) => {
+      startListeners.forEach((listener) => listener())
+      return originalStart!(...args)
+    }
+  }
+
+  function restoreStartInterceptIfUnused() {
+    if (startListeners.size > 0 || !originalStart) return
+
+    client.start = originalStart
+    originalStart = null
   }
 
   return {
@@ -129,8 +137,29 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       client.stop()
     },
 
-    subscribe({ onStateChange, onVolumeChange }: AdapterCallbacks) {
-      const { emitState, clearTimer } = makeStateEmitter(onStateChange)
+    subscribe(listener: OrbSignalListener) {
+      let signal: OrbSignal = { state: 'idle', volume: 0, outputVolume: 0 }
+      let emaVol = 0
+
+      function normalizeVapiVolume(raw: number): number {
+        const gated = raw < NOISE_FLOOR ? 0 : (raw - NOISE_FLOOR) / (1 - NOISE_FLOOR)
+        // Light EMA to bridge Vapi's alternating loud/silent artifact
+        const rate = gated > emaVol ? 0.8 : 0.5
+        emaVol = emaVol + (gated - emaVol) * rate
+        return emaVol
+      }
+
+      function emitSignal(nextSignal: OrbSignal) {
+        signal = nextSignal
+        listener(nextSignal)
+      }
+
+      function emitPatch(patch: Partial<OrbSignal> & { state?: OrbState }) {
+        emitSignal({ ...signal, ...patch, state: patch.state ?? signal.state })
+      }
+
+      const { emitState, clearTimer } = makeStateEmitter((state) => emitPatch({ state }))
+      const onStart = () => emitState('connecting')
 
       // Track current state so we can gate volume sources
       let currentState: OrbState = 'idle'
@@ -140,6 +169,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         callActive = true
         currentState = 'listening'
         emitState('listening')
+        emitPatch({ volume: 0, outputVolume: 0 })
       }
 
       const onCallEnd = () => {
@@ -147,7 +177,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         currentState = 'idle'
         stopVolLoop()
         emitState('idle')
-        onVolumeChange(0)
+        emitPatch({ volume: 0, outputVolume: 0 })
         emaVol = 0
       }
 
@@ -155,6 +185,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         if (!callActive) return
         currentState = 'speaking'
         emitState('speaking')
+        emitPatch({ volume: 0, outputVolume: 0 })
         startVolLoop()
       }
 
@@ -162,6 +193,8 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         if (!callActive) return
         stopVolLoop()
         currentState = 'listening'
+        emitPatch({ volume: 0, outputVolume: 0 })
+        emaVol = 0
         emitState('listening')
       }
 
@@ -174,7 +207,7 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       const volLoop = () => {
         if (currentState === 'speaking') {
           currentVol += (targetVol - currentVol) * 0.1
-          onVolumeChange(currentVol)
+          emitPatch({ volume: currentVol, outputVolume: currentVol })
         }
         volRaf = requestAnimationFrame(volLoop)
       }
@@ -206,9 +239,11 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
 
       const onError = (error: unknown) => {
         console.error('[orb-ui/vapi] Error:', error)
+        callActive = false
+        currentState = 'error'
+        clearTimer()
         stopVolLoop()
-        emitState('error')
-        onVolumeChange(0)
+        emitPatch({ state: 'error', volume: 0, outputVolume: 0, error })
         emaVol = 0
       }
 
@@ -221,14 +256,13 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
       client.on('error', onError)
 
       // Intercept vapi.start() to emit 'connecting' immediately
-      const originalStart = client.start.bind(client)
-      client.start = async (...args) => {
-        emitState('connecting')
-        return originalStart(...args)
-      }
+      startListeners.add(onStart)
+      ensureStartIntercept()
 
       return () => {
         clearTimer()
+        stopVolLoop()
+        emaVol = 0
         client.removeListener('call-start', onCallStart as () => void)
         client.removeListener('call-end', onCallEnd as () => void)
         client.removeListener('speech-start', onSpeechStart as () => void)
@@ -236,7 +270,8 @@ export function createVapiAdapter(client: VapiClient, options?: VapiAdapterOptio
         client.removeListener('volume-level', onVolumeLevel as (...args: unknown[]) => void)
         client.removeListener('message', onMessage as (...args: unknown[]) => void)
         client.removeListener('error', onError as (...args: unknown[]) => void)
-        client.start = originalStart
+        startListeners.delete(onStart)
+        restoreStartInterceptIfUnused()
       }
     },
   }

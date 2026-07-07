@@ -63,6 +63,24 @@ pnpm build
 pnpm dev:demo
 ```
 
+### Local provider QA playground
+
+For real adapter testing before merge or release:
+
+```bash
+pnpm build
+pnpm dev:demo
+```
+
+Then open `http://localhost:5173/provider-playground.html` and paste a Vapi public key plus
+assistant ID, or an ElevenLabs agent ID, into the Provider Config panel.
+
+The playground is intentionally local-first. Pasted values are saved in browser local storage for
+that local origin, and the Clear button removes the selected provider's saved values. To prefill
+the fields during local development, copy `demo/.env.example` to `demo/.env.local`, fill in any
+`VITE_*` defaults, and restart the demo server. Use development agents and never commit
+`.env.local`.
+
 Before opening a PR, run:
 
 ```bash

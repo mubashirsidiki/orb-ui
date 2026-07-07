@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Orb } from 'orb-ui'
-import type { OrbState, OrbTheme } from 'orb-ui'
+import type { OrbSignal, OrbState, OrbTheme } from 'orb-ui'
 
 // Constants
-const STATES: OrbState[] = ['idle', 'connecting', 'listening', 'speaking', 'error']
+const STATES: OrbState[] = ['idle', 'connecting', 'listening', 'thinking', 'speaking', 'error']
 const THEMES: OrbTheme[] = ['circle', 'bars', 'debug']
 const GITHUB_REPO_URL = 'https://github.com/alexanderqchen/orb-ui'
 const GITHUB_STAR_COLOR = '#eab308'
@@ -20,8 +20,9 @@ interface SimulationStep {
 const SIMULATION_STEPS: SimulationStep[] = [
   { state: 'idle', duration: 1300 },
   { state: 'connecting', duration: 1000 },
-  { state: 'speaking', duration: 3400 },
   { state: 'listening', duration: 2600 },
+  { state: 'thinking', duration: 900 },
+  { state: 'speaking', duration: 3400 },
 ]
 
 const SIMULATION_DURATION = SIMULATION_STEPS.reduce((total, step) => total + step.duration, 0)
@@ -57,14 +58,16 @@ const ADAPTER_CODE = `import { Orb } from "orb-ui"
 import type { OrbAdapter } from "orb-ui"
 
 const adapter: OrbAdapter = {
-  subscribe({ onStateChange, onVolumeChange }) {
-    voiceClient.on("state", onStateChange)
-    voiceClient.on("volume", onVolumeChange)
+  subscribe(listener) {
+    const unsubscribe = voiceClient.on("signal", (signal) => {
+      listener({
+        state: signal.state,
+        inputVolume: signal.inputVolume,
+        outputVolume: signal.outputVolume
+      })
+    })
 
-    return () => {
-      voiceClient.off("state", onStateChange)
-      voiceClient.off("volume", onVolumeChange)
-    }
+    return unsubscribe
   },
   start: () => voiceClient.start(),
   stop: () => voiceClient.stop()
@@ -76,12 +79,12 @@ export function VoiceOrb() {
 
 const CONTROLLED_CODE = `import { useEffect, useState } from "react"
 import { Orb } from "orb-ui"
-import type { OrbState } from "orb-ui"
+import type { OrbSignal } from "orb-ui"
 
 export function PreviewOrb() {
-  const [signal, setSignal] = useState({
-    state: "listening" as OrbState,
-    volume: 0
+  const [signal, setSignal] = useState<OrbSignal>({
+    state: "listening",
+    inputVolume: 0
   })
 
   useEffect(() => {
@@ -92,7 +95,11 @@ export function PreviewOrb() {
       const state = Math.floor(t / 3) % 2 === 0 ? "speaking" : "listening"
       const volume = Math.max(0, Math.min(1, 0.45 + Math.sin(t * 9) * 0.3))
 
-      setSignal({ state, volume })
+      setSignal(
+        state === "speaking"
+          ? { state, outputVolume: volume }
+          : { state, inputVolume: volume }
+      )
       frame = requestAnimationFrame(tick)
     }
 
@@ -101,7 +108,7 @@ export function PreviewOrb() {
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  return <Orb state={signal.state} volume={signal.volume} theme="circle" />
+  return <Orb signal={signal} theme="circle" />
 }`
 
 function clamp(value: number, min = 0, max = 1) {
@@ -157,6 +164,12 @@ function getSimulationFrame(startedAt: number, now: number) {
   }
 }
 
+function signalFromStateVolume(state: OrbState, volume: number): OrbSignal {
+  if (state === 'listening') return { state, inputVolume: volume }
+  if (state === 'speaking') return { state, outputVolume: volume }
+  return { state, volume }
+}
+
 function useConversationSimulation() {
   const [startedAt] = useState(() => nowMs())
   const [frame, setFrame] = useState(() => getSimulationFrame(nowMs(), nowMs()))
@@ -195,7 +208,7 @@ const SEO_SECTIONS = [
   {
     id: 'adapters',
     title: 'Provider adapters',
-    copy: 'Use Vapi and ElevenLabs adapters, or control state and volume yourself.',
+    copy: 'Use Vapi and ElevenLabs adapters, or control voice signals yourself.',
     link: '/docs/adapters/vapi',
     linkLabel: 'Explore adapters',
   },
@@ -347,6 +360,7 @@ export default function App() {
         mode: 'Sandbox',
         state: sandboxState,
         volume: sandboxVolume,
+        signal: signalFromStateVolume(sandboxState, sandboxVolume),
       }
     }
 
@@ -354,6 +368,7 @@ export default function App() {
       mode: 'Simulation',
       state: simulation.state,
       volume: simulation.volume,
+      signal: signalFromStateVolume(simulation.state, simulation.volume),
     }
   }, [mode, sandboxState, sandboxVolume, simulation])
 
@@ -367,9 +382,9 @@ export default function App() {
     setSandboxState(nextState)
 
     if (nextState === 'listening') {
-      setSandboxVolume((volume) => (volume === 0 ? 0.35 : volume))
+      setSandboxVolume(0.35)
     } else if (nextState === 'speaking') {
-      setSandboxVolume((volume) => (volume === 0 ? 0.65 : volume))
+      setSandboxVolume(0.65)
     } else {
       setSandboxVolume(0)
     }
@@ -559,14 +574,20 @@ export default function App() {
             justifyContent: 'center',
           }}
         >
-          <Orb theme={theme} size={280} state={activeOrb.state} volume={activeOrb.volume} />
+          <Orb theme={theme} size={280} signal={activeOrb.signal} data-testid="orb-demo-visual" />
 
           <div style={statusStripStyle}>
-            <span style={statusCellStyle}>{activeOrb.mode}</span>
+            <span data-testid="orb-demo-mode" style={statusCellStyle}>
+              {activeOrb.mode}
+            </span>
             <span style={statusSeparatorStyle}>/</span>
-            <span style={statusCellStyle}>{activeOrb.state}</span>
+            <span data-testid="orb-demo-state" style={statusCellStyle}>
+              {activeOrb.state}
+            </span>
             <span style={statusSeparatorStyle}>/</span>
-            <span style={volumeTextStyle}>{activeOrb.volume.toFixed(2)}</span>
+            <span data-testid="orb-demo-volume" style={volumeTextStyle}>
+              {activeOrb.volume.toFixed(2)}
+            </span>
           </div>
         </div>
 
