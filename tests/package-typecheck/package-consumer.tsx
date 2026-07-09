@@ -34,8 +34,10 @@ const signal: OrbSignal = {
 }
 
 const liveKitConfig: LiveKitAdapterConfig = {
-  serverUrl: 'wss://example.livekit.cloud',
-  token: 'livekit-token',
+  getConnectionDetails: async () => ({
+    serverUrl: 'wss://example.livekit.cloud',
+    participantToken: 'livekit-token',
+  }),
   createAudioAnalyser: () => ({
     calculateVolume: () => 0,
     cleanup: async () => undefined,

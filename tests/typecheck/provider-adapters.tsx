@@ -1,6 +1,6 @@
 import Vapi from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
-import { Room, createAudioAnalyser } from 'livekit-client'
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
 import { Orb } from '../../src'
 import {
   createElevenLabsAdapter,
@@ -27,8 +27,10 @@ const tokenElevenLabsAdapter = createElevenLabsAdapter(Conversation, {
 })
 
 const liveKitAdapter = createLiveKitAdapter({
-  serverUrl: 'wss://example.livekit.cloud',
-  token: 'livekit-token',
+  tokenSource: TokenSource.literal({
+    serverUrl: 'wss://example.livekit.cloud',
+    participantToken: 'livekit-token',
+  }),
   createAudioAnalyser,
   RoomClass: Room,
 })

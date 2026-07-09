@@ -180,9 +180,13 @@ describe('createLiveKitAdapter', () => {
       }
     }
 
-    const adapter = createLiveKitAdapter({
+    const getConnectionDetails = vi.fn(async () => ({
       serverUrl: 'wss://example.livekit.cloud',
-      token: 'token',
+      participantToken: 'token',
+    }))
+
+    const adapter = createLiveKitAdapter({
+      getConnectionDetails,
       createAudioAnalyser: () => ({
         calculateVolume: () => 0,
         cleanup: async () => undefined,
@@ -193,7 +197,12 @@ describe('createLiveKitAdapter', () => {
     const unsubscribe = adapter.subscribe((signal) => signals.push(signal))
     await adapter.start?.()
 
-    expect(RoomClass.instance?.connect).toHaveBeenCalledWith('wss://example.livekit.cloud', 'token')
+    expect(getConnectionDetails).toHaveBeenCalledWith({})
+    expect(RoomClass.instance?.connect).toHaveBeenCalledWith(
+      'wss://example.livekit.cloud',
+      'token',
+      undefined,
+    )
     expect(RoomClass.instance?.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true)
     expect(signals.some((signal) => signal.state === 'connecting')).toBe(true)
     expect(RoomClass.instance?.listenerCount('participantAttributesChanged')).toBe(1)
@@ -204,5 +213,54 @@ describe('createLiveKitAdapter', () => {
     expect(signals.at(-1)).toMatchObject({ state: 'idle', volume: 0, outputVolume: 0 })
 
     unsubscribe()
+  })
+
+  it('fetches LiveKit token sources with resolved per-start options', async () => {
+    let roomIndex = 0
+
+    class RoomClass extends FakeRoom {
+      static instance: FakeRoom | undefined
+
+      constructor() {
+        super()
+        RoomClass.instance = this
+      }
+    }
+
+    const tokenSource = {
+      fetch: vi.fn(async (options: Record<string, unknown>) => ({
+        serverUrl: 'wss://example.livekit.cloud',
+        participantToken: `token-for-${options.roomName}`,
+      })),
+    }
+
+    const adapter = createLiveKitAdapter({
+      tokenSource,
+      tokenOptions: {
+        agentName: 'support-agent',
+        roomName: () => `orb-ui-test-${++roomIndex}`,
+        participantIdentity: () => `tester-${roomIndex}`,
+      },
+      createAudioAnalyser: () => ({
+        calculateVolume: () => 0,
+        cleanup: async () => undefined,
+      }),
+      RoomClass,
+    })
+
+    await adapter.start?.()
+
+    expect(tokenSource.fetch).toHaveBeenCalledWith({
+      agentName: 'support-agent',
+      roomName: 'orb-ui-test-1',
+      participantIdentity: 'tester-1',
+    })
+    expect(RoomClass.instance?.connect).toHaveBeenCalledWith(
+      'wss://example.livekit.cloud',
+      'token-for-orb-ui-test-1',
+      undefined,
+    )
+
+    await adapter.stop?.()
   })
 })

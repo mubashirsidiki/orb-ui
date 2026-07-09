@@ -15,18 +15,68 @@ Install orb-ui and the LiveKit client package used by your app:
 npm install orb-ui livekit-client
 ```
 
-## Use a managed room
+## Use a token endpoint
 
-In managed mode, the adapter creates the room, connects on start, enables the local microphone, listens for the agent participant, and disconnects on stop.
+In the recommended setup, your app exposes a token endpoint and the adapter fetches fresh LiveKit
+connection details when the orb starts. The endpoint should return `{ serverUrl, participantToken }`.
 
 ```tsx
-import { Room, createAudioAnalyser } from 'livekit-client'
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
 import { Orb } from 'orb-ui'
 import { createLiveKitAdapter } from 'orb-ui/adapters'
 
 const adapter = createLiveKitAdapter({
-  serverUrl: 'wss://your-project.livekit.cloud',
-  token: 'your-livekit-token',
+  tokenSource: TokenSource.endpoint('/api/livekit-token'),
+  tokenOptions: {
+    agentName: 'your-agent-name',
+    roomName: () => `orb-${crypto.randomUUID()}`,
+  },
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+export function LiveKitVoiceUI() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
+}
+```
+
+You can also provide your own fetcher:
+
+```tsx
+const adapter = createLiveKitAdapter({
+  getConnectionDetails: async ({ agentName, roomName }) => {
+    const response = await fetch('/api/livekit-token', {
+      method: 'POST',
+      body: JSON.stringify({ agentName, roomName }),
+    })
+
+    return response.json()
+  },
+  tokenOptions: {
+    agentName: 'your-agent-name',
+    roomName: () => `orb-${crypto.randomUUID()}`,
+  },
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+```
+
+## Use a LiveKit Cloud sandbox
+
+For local and preview testing, LiveKit's sandbox token server can generate connection details without
+your own backend. Do not use this mode in production.
+
+```tsx
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  tokenSource: TokenSource.sandboxTokenServer('token-server-abc123'),
+  tokenOptions: {
+    agentName: 'your-agent-name',
+    roomName: () => `orb-${crypto.randomUUID()}`,
+  },
   createAudioAnalyser,
   RoomClass: Room,
 })
@@ -38,8 +88,8 @@ export function LiveKitVoiceUI() {
 
 ## Use an existing room
 
-Use external mode when your app already owns the LiveKit room lifecycle. External adapters subscribe
-to room state but do not expose `start` or `stop`.
+Use an existing room when your app already owns the LiveKit lifecycle. The adapter subscribes to
+room state but does not expose `start` or `stop`.
 
 ```tsx
 import { createAudioAnalyser } from 'livekit-client'
@@ -54,6 +104,20 @@ const adapter = createLiveKitAdapter({
 export function LiveKitVoiceUI() {
   return <Orb adapter={adapter} theme="circle" aria-label="LiveKit assistant status" />
 }
+```
+
+## Use raw connection details
+
+Raw credentials are supported as an advanced escape hatch. Generate participant tokens on your
+server, keep them short-lived, and avoid hard-coding them in browser bundles.
+
+```tsx
+const adapter = createLiveKitAdapter({
+  serverUrl: 'wss://your-project.livekit.cloud',
+  participantToken: 'short-lived-participant-token',
+  createAudioAnalyser,
+  RoomClass: Room,
+})
 ```
 
 ## State mapping
@@ -71,7 +135,8 @@ LiveKit remote agent audio is attached when available, and `createAudioAnalyser`
 
 ## Token handling
 
-Do not create LiveKit access tokens in the browser. Generate short-lived tokens on your server and pass them to the client-side component that owns the adapter.
+Do not create LiveKit access tokens in the browser. Use `TokenSource.endpoint`, `getConnectionDetails`,
+or another server-backed flow to generate short-lived participant tokens.
 
 ## Controlled mode
 

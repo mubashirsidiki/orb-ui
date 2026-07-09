@@ -84,13 +84,16 @@ function App() {
 ### With LiveKit
 
 ```jsx
-import { Room, createAudioAnalyser } from 'livekit-client'
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
 import { Orb } from 'orb-ui'
 import { createLiveKitAdapter } from 'orb-ui/adapters'
 
 const adapter = createLiveKitAdapter({
-  serverUrl: 'wss://your-project.livekit.cloud',
-  token: 'your-token',
+  tokenSource: TokenSource.endpoint('/api/livekit-token'),
+  tokenOptions: {
+    agentName: 'your-agent-name',
+    roomName: () => `orb-${crypto.randomUUID()}`,
+  },
   createAudioAnalyser,
   RoomClass: Room,
 })

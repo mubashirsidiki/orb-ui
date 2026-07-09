@@ -73,8 +73,8 @@ pnpm dev:demo
 ```
 
 Then open `http://localhost:5173/playground` and paste provider test config into the Provider
-Config panel: a Vapi public key plus assistant ID, an ElevenLabs agent ID, or LiveKit server URL
-and token.
+Config panel: a Vapi public key plus assistant ID, an ElevenLabs agent ID, or LiveKit sandbox
+token server ID plus agent name.
 
 The playground is intentionally local-first. Pasted values are saved in browser local storage for
 that local origin, and the Clear button removes the selected provider's saved values. To prefill
