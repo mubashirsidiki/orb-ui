@@ -1,0 +1,82 @@
+---
+title: LiveKit adapter
+description: Add a LiveKit Agents voice UI to React with orb-ui's adapter, animated orb visuals, and audio-reactive state.
+---
+
+# LiveKit voice UI components for React
+
+LiveKit Agents handles the realtime media and agent session layer. orb-ui handles the visible React UI layer: an animated voice orb, audio-reactive feedback, and predictable states for the conversation.
+
+## Install
+
+Install orb-ui and the LiveKit client package used by your app:
+
+```bash
+npm install orb-ui livekit-client
+```
+
+## Use a managed room
+
+In managed mode, the adapter creates the room, connects on start, enables the local microphone, listens for the agent participant, and disconnects on stop.
+
+```tsx
+import { Room, createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  serverUrl: 'wss://your-project.livekit.cloud',
+  token: 'your-livekit-token',
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+export function LiveKitVoiceUI() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
+}
+```
+
+## Use an existing room
+
+Use external mode when your app already owns the LiveKit room lifecycle. External adapters subscribe
+to room state but do not expose `start` or `stop`.
+
+```tsx
+import { createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  room,
+  createAudioAnalyser,
+})
+
+export function LiveKitVoiceUI() {
+  return <Orb adapter={adapter} theme="circle" aria-label="LiveKit assistant status" />
+}
+```
+
+## State mapping
+
+The adapter reads the agent participant's `lk.agent.state` attribute and maps LiveKit state into orb-ui state:
+
+- `speaking` -> `speaking`
+- `thinking` -> `thinking`
+- `listening` and `idle` -> `listening`
+- `connecting`, `pre-connect-buffering`, and `initializing` -> `connecting`
+- `disconnected` -> `idle`
+- `failed` -> `error`
+
+LiveKit remote agent audio is attached when available, and `createAudioAnalyser` is used to emit normalized `outputVolume` while the agent is speaking.
+
+## Token handling
+
+Do not create LiveKit access tokens in the browser. Generate short-lived tokens on your server and pass them to the client-side component that owns the adapter.
+
+## Controlled mode
+
+If your app already normalizes LiveKit state and volume, pass those values directly as a signal.
+
+```tsx
+<Orb signal={{ state: voiceState, outputVolume }} theme="circle" />
+```

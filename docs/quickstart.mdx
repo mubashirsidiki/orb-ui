@@ -16,6 +16,7 @@ Provider adapters also need their provider SDK installed in your app:
 ```bash
 npm install orb-ui @vapi-ai/web
 npm install orb-ui @elevenlabs/client
+npm install orb-ui livekit-client
 ```
 
 ## Controlled mode
@@ -81,6 +82,25 @@ const adapter = createElevenLabsAdapter(Conversation, {
 
 export function ElevenLabsVoiceUI() {
   return <Orb adapter={adapter} theme="bars" aria-label="Start ElevenLabs assistant" />
+}
+```
+
+## LiveKit
+
+```tsx
+import { Room, createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  serverUrl: 'wss://your-project.livekit.cloud',
+  token: 'your-livekit-token',
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+export function LiveKitVoiceUI() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
 }
 ```
 

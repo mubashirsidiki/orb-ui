@@ -1,6 +1,6 @@
 # orb-ui
 
-React voice agent UI components for Vapi, ElevenLabs, and custom realtime voice AI apps. orb-ui gives you animated voice orbs, audio-reactive themes, accessible clickable controls, and provider adapters for building polished voice agent interfaces in React.
+React voice agent UI components for Vapi, ElevenLabs, LiveKit, and custom realtime voice AI apps. orb-ui gives you animated voice orbs, audio-reactive themes, accessible clickable controls, and provider adapters for building polished voice agent interfaces in React.
 
 <p align="center">
   <a href="https://orb-ui.com">
@@ -41,13 +41,16 @@ npm install orb-ui @vapi-ai/web
 
 # ElevenLabs Conversational AI
 npm install orb-ui @elevenlabs/client
+
+# LiveKit Agents
+npm install orb-ui livekit-client
 ```
 
 > **Note:** Orb uses React hooks internally — in Next.js App Router, use it in a `'use client'` component.
 
 ## Quick Start
 
-Use orb-ui as a React voice AI component when you need a Vapi voice UI, an ElevenLabs voice UI, or a custom animated voice orb for another realtime voice agent stack.
+Use orb-ui as a React voice AI component when you need a Vapi voice UI, an ElevenLabs voice UI, a LiveKit voice UI, or a custom animated voice orb for another realtime voice agent stack.
 
 ### With Vapi
 
@@ -75,6 +78,25 @@ const adapter = createElevenLabsAdapter(Conversation, { agentId: 'your-agent-id'
 
 function App() {
   return <Orb adapter={adapter} theme="circle" aria-label="Start ElevenLabs assistant" />
+}
+```
+
+### With LiveKit
+
+```jsx
+import { Room, createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  serverUrl: 'wss://your-project.livekit.cloud',
+  token: 'your-token',
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+function App() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
 }
 ```
 
@@ -139,6 +161,7 @@ When an adapter or `onStart`/`onStop` handler is provided, `circle` and `bars` r
 | ----------------------------------------------------- | --------------------------------------------------------------------- |
 | [Vapi](https://vapi.ai)                               | `createVapiAdapter` from `orb-ui/adapters`                            |
 | [ElevenLabs](https://elevenlabs.io/conversational-ai) | `createElevenLabsAdapter` from `orb-ui/adapters`                      |
+| [LiveKit](https://livekit.io)                         | `createLiveKitAdapter` from `orb-ui/adapters`                         |
 | Custom                                                | Use controlled mode — pass `signal`, or `state` and `volume` directly |
 
 ## Development

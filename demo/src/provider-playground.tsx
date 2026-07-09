@@ -2,17 +2,20 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import VapiImport from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
+import { Room, createAudioAnalyser } from 'livekit-client'
 import { Orb } from 'orb-ui'
 import type { OrbAdapter, OrbSignal, OrbState, OrbTheme } from 'orb-ui'
-import { createElevenLabsAdapter, createVapiAdapter } from 'orb-ui/adapters'
+import { createElevenLabsAdapter, createLiveKitAdapter, createVapiAdapter } from 'orb-ui/adapters'
 import './provider-playground.css'
 
-type ProviderId = 'manual' | 'vapi' | 'elevenlabs'
+type ProviderId = 'manual' | 'vapi' | 'elevenlabs' | 'livekit'
 
 interface ProviderConfig {
   vapiPublicKey: string
   vapiAssistantId: string
   elevenLabsAgentId: string
+  liveKitServerUrl: string
+  liveKitToken: string
 }
 
 interface EventEntry {
@@ -29,6 +32,7 @@ const PROVIDERS: Array<{ id: ProviderId; label: string }> = [
   { id: 'manual', label: 'Manual Signal' },
   { id: 'vapi', label: 'Vapi' },
   { id: 'elevenlabs', label: 'ElevenLabs' },
+  { id: 'livekit', label: 'LiveKit' },
 ]
 
 const THEMES: OrbTheme[] = ['circle', 'bars', 'debug']
@@ -87,6 +91,10 @@ function readStoredConfig(): Partial<ProviderConfig> {
     if (typeof parsed.elevenLabsAgentId === 'string') {
       storedConfig.elevenLabsAgentId = parsed.elevenLabsAgentId
     }
+    if (typeof parsed.liveKitServerUrl === 'string') {
+      storedConfig.liveKitServerUrl = parsed.liveKitServerUrl
+    }
+    if (typeof parsed.liveKitToken === 'string') storedConfig.liveKitToken = parsed.liveKitToken
 
     return storedConfig
   } catch {
@@ -110,6 +118,8 @@ function readEnvConfig(): ProviderConfig {
     vapiPublicKey: import.meta.env.VITE_VAPI_PUBLIC_KEY ?? '',
     vapiAssistantId: import.meta.env.VITE_VAPI_ASSISTANT_ID ?? '',
     elevenLabsAgentId: import.meta.env.VITE_ELEVENLABS_AGENT_ID ?? '',
+    liveKitServerUrl: import.meta.env.VITE_LIVEKIT_SERVER_URL ?? '',
+    liveKitToken: import.meta.env.VITE_LIVEKIT_TOKEN ?? '',
   }
 }
 
@@ -125,6 +135,8 @@ function normalizeConfig(config: ProviderConfig): ProviderConfig {
     vapiPublicKey: (config.vapiPublicKey ?? '').trim(),
     vapiAssistantId: (config.vapiAssistantId ?? '').trim(),
     elevenLabsAgentId: (config.elevenLabsAgentId ?? '').trim(),
+    liveKitServerUrl: (config.liveKitServerUrl ?? '').trim(),
+    liveKitToken: (config.liveKitToken ?? '').trim(),
   }
 }
 
@@ -141,7 +153,8 @@ function createManualSignal(state: OrbState, inputVolume: number, outputVolume: 
 function getProviderReady(provider: ProviderId, config: ProviderConfig) {
   if (provider === 'manual') return true
   if (provider === 'vapi') return Boolean(config.vapiPublicKey && config.vapiAssistantId)
-  return Boolean(config.elevenLabsAgentId)
+  if (provider === 'elevenlabs') return Boolean(config.elevenLabsAgentId)
+  return Boolean(config.liveKitServerUrl && config.liveKitToken)
 }
 
 function createLazyAdapter(factory: () => OrbAdapter): OrbAdapter {
@@ -210,6 +223,17 @@ function createProviderAdapter(
     return createLazyAdapter(() =>
       createElevenLabsAdapter(Conversation, {
         agentId: config.elevenLabsAgentId,
+      }),
+    )
+  }
+
+  if (provider === 'livekit' && getProviderReady(provider, config)) {
+    return createLazyAdapter(() =>
+      createLiveKitAdapter({
+        serverUrl: config.liveKitServerUrl,
+        token: config.liveKitToken,
+        createAudioAnalyser,
+        RoomClass: Room,
       }),
     )
   }
@@ -310,6 +334,14 @@ function ProviderPlayground() {
         return { ...current, elevenLabsAgentId: defaultConfig.elevenLabsAgentId }
       }
 
+      if (provider === 'livekit') {
+        return {
+          ...current,
+          liveKitServerUrl: defaultConfig.liveKitServerUrl,
+          liveKitToken: defaultConfig.liveKitToken,
+        }
+      }
+
       return current
     })
   }, [provider])
@@ -322,6 +354,10 @@ function ProviderPlayground() {
 
       if (provider === 'elevenlabs') {
         return { ...current, elevenLabsAgentId: '' }
+      }
+
+      if (provider === 'livekit') {
+        return { ...current, liveKitServerUrl: '', liveKitToken: '' }
       }
 
       return current
@@ -564,7 +600,11 @@ function ProviderPlayground() {
             {provider !== 'manual' ? (
               <section className="provider-panel provider-diagnostics">
                 <span className="provider-label">
-                  {provider === 'vapi' ? 'Vapi Config' : 'ElevenLabs Config'}
+                  {provider === 'vapi'
+                    ? 'Vapi Config'
+                    : provider === 'elevenlabs'
+                      ? 'ElevenLabs Config'
+                      : 'LiveKit Config'}
                 </span>
                 <div className="provider-field-list">
                   {provider === 'vapi' ? (
@@ -583,13 +623,29 @@ function ProviderPlayground() {
                         value={config.vapiAssistantId}
                       />
                     </>
-                  ) : (
+                  ) : provider === 'elevenlabs' ? (
                     <ConfigField
                       id="config-elevenlabs-agent-id"
                       label="ElevenLabs agent ID"
                       onChange={(value) => updateConfig('elevenLabsAgentId', value)}
                       value={config.elevenLabsAgentId}
                     />
+                  ) : (
+                    <>
+                      <ConfigField
+                        id="config-livekit-server-url"
+                        label="LiveKit server URL"
+                        onChange={(value) => updateConfig('liveKitServerUrl', value)}
+                        value={config.liveKitServerUrl}
+                      />
+                      <ConfigField
+                        id="config-livekit-token"
+                        label="LiveKit token"
+                        onChange={(value) => updateConfig('liveKitToken', value)}
+                        type="password"
+                        value={config.liveKitToken}
+                      />
+                    </>
                   )}
                 </div>
                 <div className="provider-config-actions">
@@ -609,11 +665,19 @@ function ProviderPlayground() {
                         ready={Boolean(activeConfig.vapiAssistantId)}
                       />
                     </>
-                  ) : (
+                  ) : provider === 'elevenlabs' ? (
                     <EnvRow
                       label="ElevenLabs agent ID"
                       ready={Boolean(activeConfig.elevenLabsAgentId)}
                     />
+                  ) : (
+                    <>
+                      <EnvRow
+                        label="LiveKit server URL"
+                        ready={Boolean(activeConfig.liveKitServerUrl)}
+                      />
+                      <EnvRow label="LiveKit token" ready={Boolean(activeConfig.liveKitToken)} />
+                    </>
                   )}
                 </div>
               </section>

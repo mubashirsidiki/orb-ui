@@ -10,7 +10,7 @@ const GITHUB_REPO_URL = 'https://github.com/alexanderqchen/orb-ui'
 const GITHUB_STAR_COLOR = '#eab308'
 
 type DemoMode = 'simulation' | 'sandbox'
-type CodeTab = 'vapi' | 'elevenlabs' | 'adapter' | 'controlled'
+type CodeTab = 'vapi' | 'elevenlabs' | 'livekit' | 'adapter' | 'controlled'
 
 interface SimulationStep {
   state: OrbState
@@ -75,6 +75,21 @@ const adapter: OrbAdapter = {
 
 export function VoiceOrb() {
   return <Orb adapter={adapter} theme="circle" aria-label="Start voice assistant" />
+}`
+
+const LIVEKIT_CODE = `import { Room, createAudioAnalyser } from "livekit-client"
+import { Orb } from "orb-ui"
+import { createLiveKitAdapter } from "orb-ui/adapters"
+
+const adapter = createLiveKitAdapter({
+  serverUrl: "wss://your-project.livekit.cloud",
+  token: "your-token",
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+function App() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
 }`
 
 const CONTROLLED_CODE = `import { useEffect, useState } from "react"
@@ -209,7 +224,7 @@ const SEO_SECTIONS = [
   {
     id: 'adapters',
     title: 'Provider adapters',
-    copy: 'Use Vapi and ElevenLabs adapters, or control voice signals yourself.',
+    copy: 'Use Vapi, ElevenLabs, and LiveKit adapters, or control voice signals yourself.',
     link: '/docs/adapters/vapi',
     linkLabel: 'Explore adapters',
   },
@@ -335,6 +350,8 @@ function codeForTab(tab: CodeTab) {
   switch (tab) {
     case 'elevenlabs':
       return ELEVENLABS_CODE
+    case 'livekit':
+      return LIVEKIT_CODE
     case 'adapter':
       return ADAPTER_CODE
     case 'controlled':
@@ -521,8 +538,8 @@ export default function App() {
         </h1>
         <p style={{ fontSize: 16, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
           orb-ui is a React voice agent UI library with animated orb components, audio-reactive
-          themes, Vapi and ElevenLabs adapters, and controlled mode for custom realtime voice
-          agents.
+          themes, Vapi, ElevenLabs, and LiveKit adapters, and controlled mode for custom realtime
+          voice agents.
         </p>
         <div
           style={{
@@ -681,6 +698,9 @@ export default function App() {
             style={btnStyle(codeTab === 'elevenlabs')}
           >
             ElevenLabs
+          </button>
+          <button onClick={() => setCodeTab('livekit')} style={btnStyle(codeTab === 'livekit')}>
+            LiveKit
           </button>
           <button onClick={() => setCodeTab('adapter')} style={btnStyle(codeTab === 'adapter')}>
             Adapter
