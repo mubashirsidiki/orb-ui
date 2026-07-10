@@ -1,6 +1,11 @@
 import { Orb } from 'orb-ui'
-import { createElevenLabsAdapter } from 'orb-ui/adapters'
-import type { ElevenLabsConversationClass, OrbAdapter, OrbSignal } from 'orb-ui/adapters'
+import { createElevenLabsAdapter, createLiveKitAdapter } from 'orb-ui/adapters'
+import type {
+  ElevenLabsConversationClass,
+  LiveKitAdapterConfig,
+  OrbAdapter,
+  OrbSignal,
+} from 'orb-ui/adapters'
 
 const Conversation: ElevenLabsConversationClass = {
   startSession: async () => ({
@@ -28,10 +33,35 @@ const signal: OrbSignal = {
   outputVolume: 0.7,
 }
 
+const liveKitConfig: LiveKitAdapterConfig = {
+  getConnectionDetails: async () => ({
+    serverUrl: 'wss://example.livekit.cloud',
+    participantToken: 'livekit-token',
+  }),
+  createAudioAnalyser: () => ({
+    calculateVolume: () => 0,
+    cleanup: async () => undefined,
+  }),
+  RoomClass: class {
+    remoteParticipants = new Map()
+    localParticipant = {
+      setMicrophoneEnabled: async () => undefined,
+    }
+    state = 'disconnected'
+    connect = async () => undefined
+    disconnect = () => undefined
+    on = () => undefined
+    off = () => undefined
+  },
+}
+
+const liveKitAdapter = createLiveKitAdapter(liveKitConfig)
+
 export function PackageConsumerSmoke() {
   return (
     <>
       <Orb adapter={elevenLabsAdapter} theme="circle" aria-label="Start ElevenLabs assistant" />
+      <Orb adapter={liveKitAdapter} theme="circle" aria-label="Start LiveKit assistant" />
       <Orb adapter={customAdapter} theme="debug" />
       <Orb signal={signal} theme="circle" />
     </>

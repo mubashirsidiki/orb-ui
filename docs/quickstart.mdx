@@ -16,6 +16,7 @@ Provider adapters also need their provider SDK installed in your app:
 ```bash
 npm install orb-ui @vapi-ai/web
 npm install orb-ui @elevenlabs/client
+npm install orb-ui livekit-client
 ```
 
 ## Controlled mode
@@ -83,6 +84,31 @@ export function ElevenLabsVoiceUI() {
   return <Orb adapter={adapter} theme="bars" aria-label="Start ElevenLabs assistant" />
 }
 ```
+
+## LiveKit
+
+```tsx
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
+import { Orb } from 'orb-ui'
+import { createLiveKitAdapter } from 'orb-ui/adapters'
+
+const adapter = createLiveKitAdapter({
+  tokenSource: TokenSource.endpoint('/api/livekit-token'),
+  tokenOptions: {
+    agentName: 'your-agent-name',
+    roomName: () => `orb-${crypto.randomUUID()}`,
+  },
+  createAudioAnalyser,
+  RoomClass: Room,
+})
+
+export function LiveKitVoiceUI() {
+  return <Orb adapter={adapter} theme="circle" aria-label="Start LiveKit assistant" />
+}
+```
+
+While the agent is listening, the adapter emits local microphone activity as `inputVolume`. While
+the agent is speaking, it emits the attached remote audio level as `outputVolume`.
 
 ## Themes
 

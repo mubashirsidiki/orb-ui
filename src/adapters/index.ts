@@ -11,6 +11,15 @@ export {
   type ElevenLabsStartSessionOptions,
   type ElevenLabsStatus,
 } from './elevenlabs'
+export {
+  createLiveKitAdapter,
+  type LiveKitAdapterConfig,
+  type LiveKitConnectionDetails,
+  type LiveKitOrbAdapter,
+  type LiveKitResolvedTokenOptions,
+  type LiveKitTokenOptions,
+  type LiveKitTokenSource,
+} from './livekit'
 export type {
   AdapterCallbacks,
   LegacyOrbAdapter,

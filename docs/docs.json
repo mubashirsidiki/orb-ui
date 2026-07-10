@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "maple",
   "name": "orb-ui",
-  "description": "React voice agent UI components for Vapi, ElevenLabs, and custom realtime voice AI apps.",
+  "description": "React voice agent UI components for Vapi, ElevenLabs, LiveKit, and custom realtime voice AI apps.",
   "colors": {
     "primary": "#4da3ff",
     "light": "#9fd2ff",
@@ -77,6 +77,7 @@
         "pages": [
           "adapters/vapi",
           "adapters/elevenlabs",
+          "adapters/livekit",
           "adapters/custom",
           "adapters/openai-realtime",
           "adapters/gemini-live"

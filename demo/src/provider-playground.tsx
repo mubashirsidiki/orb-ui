@@ -2,17 +2,26 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import VapiImport from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
 import { Orb } from 'orb-ui'
 import type { OrbAdapter, OrbSignal, OrbState, OrbTheme } from 'orb-ui'
-import { createElevenLabsAdapter, createVapiAdapter } from 'orb-ui/adapters'
+import { createElevenLabsAdapter, createLiveKitAdapter, createVapiAdapter } from 'orb-ui/adapters'
 import './provider-playground.css'
 
-type ProviderId = 'manual' | 'vapi' | 'elevenlabs'
+type ProviderId = 'manual' | 'vapi' | 'elevenlabs' | 'livekit'
+type LiveKitConnectionMode = 'sandbox' | 'endpoint' | 'raw'
 
 interface ProviderConfig {
   vapiPublicKey: string
   vapiAssistantId: string
   elevenLabsAgentId: string
+  liveKitConnectionMode: LiveKitConnectionMode
+  liveKitSandboxId: string
+  liveKitTokenEndpoint: string
+  liveKitAgentName: string
+  liveKitRoomPrefix: string
+  liveKitServerUrl: string
+  liveKitParticipantToken: string
 }
 
 interface EventEntry {
@@ -24,15 +33,24 @@ interface EventEntry {
 
 type VapiClient = Parameters<typeof createVapiAdapter>[0]
 type VapiConstructor = new (apiToken: string) => VapiClient
+type LiveKitAudioTrack = Parameters<typeof createAudioAnalyser>[0]
 
 const PROVIDERS: Array<{ id: ProviderId; label: string }> = [
   { id: 'manual', label: 'Manual Signal' },
   { id: 'vapi', label: 'Vapi' },
   { id: 'elevenlabs', label: 'ElevenLabs' },
+  { id: 'livekit', label: 'LiveKit' },
+]
+
+const LIVEKIT_CONNECTION_MODES: Array<{ id: LiveKitConnectionMode; label: string }> = [
+  { id: 'sandbox', label: 'Cloud Sandbox' },
+  { id: 'endpoint', label: 'Token Endpoint' },
+  { id: 'raw', label: 'Raw Details' },
 ]
 
 const THEMES: OrbTheme[] = ['circle', 'bars', 'debug']
 const STATES: OrbState[] = ['idle', 'connecting', 'listening', 'thinking', 'speaking', 'error']
+const DEFAULT_LIVEKIT_ROOM_PREFIX = 'orb-ui-playground'
 
 const EMPTY_SIGNAL: OrbSignal = { state: 'idle', volume: 0, inputVolume: 0, outputVolume: 0 }
 const CONFIG_STORAGE_KEY = 'orb-ui:provider-playground-config'
@@ -61,6 +79,21 @@ function getVapiConstructor(): VapiConstructor {
   throw new TypeError('Vapi constructor export was not found.')
 }
 
+function normalizeLiveKitConnectionMode(value: unknown): LiveKitConnectionMode {
+  if (value === 'endpoint' || value === 'raw' || value === 'sandbox') return value
+  return 'sandbox'
+}
+
+function createLiveKitRoomName(prefix: string) {
+  const normalizedPrefix = prefix || DEFAULT_LIVEKIT_ROOM_PREFIX
+  const randomId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  return `${normalizedPrefix}-${randomId}`
+}
+
 function getStorage() {
   if (typeof window === 'undefined') return undefined
 
@@ -87,6 +120,31 @@ function readStoredConfig(): Partial<ProviderConfig> {
     if (typeof parsed.elevenLabsAgentId === 'string') {
       storedConfig.elevenLabsAgentId = parsed.elevenLabsAgentId
     }
+    if (typeof parsed.liveKitConnectionMode === 'string') {
+      storedConfig.liveKitConnectionMode = normalizeLiveKitConnectionMode(
+        parsed.liveKitConnectionMode,
+      )
+    }
+    if (typeof parsed.liveKitSandboxId === 'string') {
+      storedConfig.liveKitSandboxId = parsed.liveKitSandboxId
+    }
+    if (typeof parsed.liveKitTokenEndpoint === 'string') {
+      storedConfig.liveKitTokenEndpoint = parsed.liveKitTokenEndpoint
+    }
+    if (typeof parsed.liveKitAgentName === 'string') {
+      storedConfig.liveKitAgentName = parsed.liveKitAgentName
+    }
+    if (typeof parsed.liveKitRoomPrefix === 'string') {
+      storedConfig.liveKitRoomPrefix = parsed.liveKitRoomPrefix
+    }
+    if (typeof parsed.liveKitServerUrl === 'string') {
+      storedConfig.liveKitServerUrl = parsed.liveKitServerUrl
+    }
+    if (typeof parsed.liveKitParticipantToken === 'string' && parsed.liveKitParticipantToken) {
+      storedConfig.liveKitParticipantToken = parsed.liveKitParticipantToken
+    } else if (typeof parsed.liveKitToken === 'string' && parsed.liveKitToken) {
+      storedConfig.liveKitParticipantToken = parsed.liveKitToken
+    }
 
     return storedConfig
   } catch {
@@ -99,7 +157,9 @@ function writeStoredConfig(config: ProviderConfig) {
   if (!storage) return
 
   try {
-    storage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config))
+    const storedConfig: Partial<ProviderConfig> = { ...config }
+    delete storedConfig.liveKitParticipantToken
+    storage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(storedConfig))
   } catch {
     // Storage can be disabled or full in some browser modes.
   }
@@ -110,6 +170,14 @@ function readEnvConfig(): ProviderConfig {
     vapiPublicKey: import.meta.env.VITE_VAPI_PUBLIC_KEY ?? '',
     vapiAssistantId: import.meta.env.VITE_VAPI_ASSISTANT_ID ?? '',
     elevenLabsAgentId: import.meta.env.VITE_ELEVENLABS_AGENT_ID ?? '',
+    liveKitConnectionMode: normalizeLiveKitConnectionMode(import.meta.env.VITE_LIVEKIT_MODE),
+    liveKitSandboxId: import.meta.env.VITE_LIVEKIT_SANDBOX_ID ?? '',
+    liveKitTokenEndpoint: import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT ?? '',
+    liveKitAgentName: import.meta.env.VITE_LIVEKIT_AGENT_NAME ?? '',
+    liveKitRoomPrefix: import.meta.env.VITE_LIVEKIT_ROOM_PREFIX ?? DEFAULT_LIVEKIT_ROOM_PREFIX,
+    liveKitServerUrl: import.meta.env.VITE_LIVEKIT_SERVER_URL ?? '',
+    liveKitParticipantToken:
+      import.meta.env.VITE_LIVEKIT_PARTICIPANT_TOKEN ?? import.meta.env.VITE_LIVEKIT_TOKEN ?? '',
   }
 }
 
@@ -125,6 +193,13 @@ function normalizeConfig(config: ProviderConfig): ProviderConfig {
     vapiPublicKey: (config.vapiPublicKey ?? '').trim(),
     vapiAssistantId: (config.vapiAssistantId ?? '').trim(),
     elevenLabsAgentId: (config.elevenLabsAgentId ?? '').trim(),
+    liveKitConnectionMode: normalizeLiveKitConnectionMode(config.liveKitConnectionMode),
+    liveKitSandboxId: (config.liveKitSandboxId ?? '').trim(),
+    liveKitTokenEndpoint: (config.liveKitTokenEndpoint ?? '').trim(),
+    liveKitAgentName: (config.liveKitAgentName ?? '').trim(),
+    liveKitRoomPrefix: (config.liveKitRoomPrefix ?? '').trim() || DEFAULT_LIVEKIT_ROOM_PREFIX,
+    liveKitServerUrl: (config.liveKitServerUrl ?? '').trim(),
+    liveKitParticipantToken: (config.liveKitParticipantToken ?? '').trim(),
   }
 }
 
@@ -141,7 +216,14 @@ function createManualSignal(state: OrbState, inputVolume: number, outputVolume: 
 function getProviderReady(provider: ProviderId, config: ProviderConfig) {
   if (provider === 'manual') return true
   if (provider === 'vapi') return Boolean(config.vapiPublicKey && config.vapiAssistantId)
-  return Boolean(config.elevenLabsAgentId)
+  if (provider === 'elevenlabs') return Boolean(config.elevenLabsAgentId)
+  if (config.liveKitConnectionMode === 'sandbox') {
+    return Boolean(config.liveKitSandboxId && config.liveKitAgentName)
+  }
+  if (config.liveKitConnectionMode === 'endpoint') {
+    return Boolean(config.liveKitTokenEndpoint && config.liveKitAgentName)
+  }
+  return Boolean(config.liveKitServerUrl && config.liveKitParticipantToken)
 }
 
 function createLazyAdapter(factory: () => OrbAdapter): OrbAdapter {
@@ -214,6 +296,41 @@ function createProviderAdapter(
     )
   }
 
+  if (provider === 'livekit' && getProviderReady(provider, config)) {
+    return createLazyAdapter(() => {
+      if (config.liveKitConnectionMode === 'sandbox') {
+        return createLiveKitAdapter<LiveKitAudioTrack>({
+          tokenSource: TokenSource.sandboxTokenServer(config.liveKitSandboxId),
+          tokenOptions: {
+            agentName: config.liveKitAgentName,
+            roomName: () => createLiveKitRoomName(config.liveKitRoomPrefix),
+          },
+          createAudioAnalyser,
+          RoomClass: Room,
+        })
+      }
+
+      if (config.liveKitConnectionMode === 'endpoint') {
+        return createLiveKitAdapter<LiveKitAudioTrack>({
+          tokenSource: TokenSource.endpoint(config.liveKitTokenEndpoint),
+          tokenOptions: {
+            agentName: config.liveKitAgentName,
+            roomName: () => createLiveKitRoomName(config.liveKitRoomPrefix),
+          },
+          createAudioAnalyser,
+          RoomClass: Room,
+        })
+      }
+
+      return createLiveKitAdapter<LiveKitAudioTrack>({
+        serverUrl: config.liveKitServerUrl,
+        participantToken: config.liveKitParticipantToken,
+        createAudioAnalyser,
+        RoomClass: Room,
+      })
+    })
+  }
+
   return undefined
 }
 
@@ -247,7 +364,7 @@ function ConfigField({
   id: string
   label: string
   onChange: (value: string) => void
-  type?: 'password' | 'text'
+  type?: 'password' | 'text' | 'url'
   value: string
 }) {
   return (
@@ -290,7 +407,10 @@ function ProviderPlayground() {
     [activeConfig, provider],
   )
 
-  const updateConfig = useCallback((key: keyof ProviderConfig, value: string) => {
+  const updateConfig = useCallback(function updateConfig<TKey extends keyof ProviderConfig>(
+    key: TKey,
+    value: ProviderConfig[TKey],
+  ) {
     setConfig((current) => ({ ...current, [key]: value }))
   }, [])
 
@@ -310,6 +430,19 @@ function ProviderPlayground() {
         return { ...current, elevenLabsAgentId: defaultConfig.elevenLabsAgentId }
       }
 
+      if (provider === 'livekit') {
+        return {
+          ...current,
+          liveKitConnectionMode: defaultConfig.liveKitConnectionMode,
+          liveKitSandboxId: defaultConfig.liveKitSandboxId,
+          liveKitTokenEndpoint: defaultConfig.liveKitTokenEndpoint,
+          liveKitAgentName: defaultConfig.liveKitAgentName,
+          liveKitRoomPrefix: defaultConfig.liveKitRoomPrefix,
+          liveKitServerUrl: defaultConfig.liveKitServerUrl,
+          liveKitParticipantToken: defaultConfig.liveKitParticipantToken,
+        }
+      }
+
       return current
     })
   }, [provider])
@@ -322,6 +455,18 @@ function ProviderPlayground() {
 
       if (provider === 'elevenlabs') {
         return { ...current, elevenLabsAgentId: '' }
+      }
+
+      if (provider === 'livekit') {
+        return {
+          ...current,
+          liveKitSandboxId: '',
+          liveKitTokenEndpoint: '',
+          liveKitAgentName: '',
+          liveKitRoomPrefix: DEFAULT_LIVEKIT_ROOM_PREFIX,
+          liveKitServerUrl: '',
+          liveKitParticipantToken: '',
+        }
       }
 
       return current
@@ -564,7 +709,11 @@ function ProviderPlayground() {
             {provider !== 'manual' ? (
               <section className="provider-panel provider-diagnostics">
                 <span className="provider-label">
-                  {provider === 'vapi' ? 'Vapi Config' : 'ElevenLabs Config'}
+                  {provider === 'vapi'
+                    ? 'Vapi Config'
+                    : provider === 'elevenlabs'
+                      ? 'ElevenLabs Config'
+                      : 'LiveKit Config'}
                 </span>
                 <div className="provider-field-list">
                   {provider === 'vapi' ? (
@@ -583,13 +732,86 @@ function ProviderPlayground() {
                         value={config.vapiAssistantId}
                       />
                     </>
-                  ) : (
+                  ) : provider === 'elevenlabs' ? (
                     <ConfigField
                       id="config-elevenlabs-agent-id"
                       label="ElevenLabs agent ID"
                       onChange={(value) => updateConfig('elevenLabsAgentId', value)}
                       value={config.elevenLabsAgentId}
                     />
+                  ) : (
+                    <>
+                      <div className="provider-control-group">
+                        <span className="provider-label">Connection</span>
+                        <div className="provider-segment">
+                          {LIVEKIT_CONNECTION_MODES.map((item) => (
+                            <button
+                              className={`provider-button ${
+                                config.liveKitConnectionMode === item.id ? 'is-selected' : ''
+                              }`}
+                              key={item.id}
+                              onClick={() => updateConfig('liveKitConnectionMode', item.id)}
+                              type="button"
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {config.liveKitConnectionMode === 'sandbox' ? (
+                        <ConfigField
+                          id="config-livekit-sandbox-id"
+                          label="Sandbox token server ID"
+                          onChange={(value) => updateConfig('liveKitSandboxId', value)}
+                          value={config.liveKitSandboxId}
+                        />
+                      ) : null}
+
+                      {config.liveKitConnectionMode === 'endpoint' ? (
+                        <ConfigField
+                          id="config-livekit-token-endpoint"
+                          label="Token endpoint URL"
+                          onChange={(value) => updateConfig('liveKitTokenEndpoint', value)}
+                          type="url"
+                          value={config.liveKitTokenEndpoint}
+                        />
+                      ) : null}
+
+                      {config.liveKitConnectionMode === 'raw' ? (
+                        <>
+                          <ConfigField
+                            id="config-livekit-server-url"
+                            label="LiveKit server URL"
+                            onChange={(value) => updateConfig('liveKitServerUrl', value)}
+                            type="url"
+                            value={config.liveKitServerUrl}
+                          />
+                          <ConfigField
+                            id="config-livekit-participant-token"
+                            label="Participant token"
+                            onChange={(value) => updateConfig('liveKitParticipantToken', value)}
+                            type="password"
+                            value={config.liveKitParticipantToken}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <ConfigField
+                            id="config-livekit-agent-name"
+                            label="Agent name"
+                            onChange={(value) => updateConfig('liveKitAgentName', value)}
+                            value={config.liveKitAgentName}
+                          />
+                          <ConfigField
+                            id="config-livekit-room-prefix"
+                            label="Room prefix"
+                            onChange={(value) => updateConfig('liveKitRoomPrefix', value)}
+                            value={config.liveKitRoomPrefix}
+                          />
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
                 <div className="provider-config-actions">
@@ -609,11 +831,54 @@ function ProviderPlayground() {
                         ready={Boolean(activeConfig.vapiAssistantId)}
                       />
                     </>
-                  ) : (
+                  ) : provider === 'elevenlabs' ? (
                     <EnvRow
                       label="ElevenLabs agent ID"
                       ready={Boolean(activeConfig.elevenLabsAgentId)}
                     />
+                  ) : (
+                    <>
+                      <EnvRow
+                        label="Connection mode"
+                        ready={Boolean(activeConfig.liveKitConnectionMode)}
+                      />
+                      {activeConfig.liveKitConnectionMode === 'sandbox' ? (
+                        <EnvRow
+                          label="Sandbox token server ID"
+                          ready={Boolean(activeConfig.liveKitSandboxId)}
+                        />
+                      ) : null}
+                      {activeConfig.liveKitConnectionMode === 'endpoint' ? (
+                        <EnvRow
+                          label="Token endpoint URL"
+                          ready={Boolean(activeConfig.liveKitTokenEndpoint)}
+                        />
+                      ) : null}
+                      {activeConfig.liveKitConnectionMode !== 'raw' ? (
+                        <>
+                          <EnvRow
+                            label="Agent name"
+                            ready={Boolean(activeConfig.liveKitAgentName)}
+                          />
+                          <EnvRow
+                            label="Room prefix"
+                            ready={Boolean(activeConfig.liveKitRoomPrefix)}
+                          />
+                        </>
+                      ) : null}
+                      {activeConfig.liveKitConnectionMode === 'raw' ? (
+                        <>
+                          <EnvRow
+                            label="LiveKit server URL"
+                            ready={Boolean(activeConfig.liveKitServerUrl)}
+                          />
+                          <EnvRow
+                            label="Participant token"
+                            ready={Boolean(activeConfig.liveKitParticipantToken)}
+                          />
+                        </>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </section>

@@ -17,6 +17,13 @@ Target direction:
 - Document migration from callback-object adapters
 - Remove surprising global audio behavior from `Orb`
 
+### LiveKit adapter
+
+Add first-class LiveKit Agents support with signal-native state, local microphone and remote agent
+volume metering, attached agent audio, and token-source based connection setup. The adapter should
+keep browser auth explicit by favoring token endpoints and LiveKit sandbox token servers over raw
+pasted participant tokens.
+
 ### OpenAI Realtime adapter
 
 Add first-class OpenAI Realtime support after the signal API lands. The initial adapter should focus on browser voice UI use cases and keep server-side token/session creation explicit in user apps.

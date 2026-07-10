@@ -1,7 +1,12 @@
 import Vapi from '@vapi-ai/web'
 import { Conversation } from '@elevenlabs/client'
+import { Room, TokenSource, createAudioAnalyser } from 'livekit-client'
 import { Orb } from '../../src'
-import { createElevenLabsAdapter, createVapiAdapter } from '../../src/adapters'
+import {
+  createElevenLabsAdapter,
+  createLiveKitAdapter,
+  createVapiAdapter,
+} from '../../src/adapters'
 import type { LegacyOrbAdapter, OrbAdapter, OrbSignal } from '../../src/adapters'
 
 const vapi = new Vapi('public-key')
@@ -19,6 +24,15 @@ const signedUrlElevenLabsAdapter = createElevenLabsAdapter(Conversation, {
 
 const tokenElevenLabsAdapter = createElevenLabsAdapter(Conversation, {
   conversationToken: 'conversation-token',
+})
+
+const liveKitAdapter = createLiveKitAdapter({
+  tokenSource: TokenSource.literal({
+    serverUrl: 'wss://example.livekit.cloud',
+    participantToken: 'livekit-token',
+  }),
+  createAudioAnalyser,
+  RoomClass: Room,
 })
 
 const customSignalAdapter: OrbAdapter = {
@@ -85,6 +99,7 @@ export function ProviderAdapterSmokeExamples() {
         theme="circle"
         aria-label="Start token-based ElevenLabs voice assistant"
       />
+      <Orb adapter={liveKitAdapter} theme="circle" aria-label="Start LiveKit voice assistant" />
       <Orb adapter={customSignalAdapter} theme="circle" aria-label="Start custom voice assistant" />
       <Orb adapter={legacyAdapter} theme="debug" />
       <Orb signal={signal} theme="circle" />
