@@ -1,3 +1,4 @@
+import { normalizeMicVolume } from '../types'
 import type { OrbAdapter, OrbSignal, OrbSignalListener, OrbState } from '../types'
 
 // Minimal LiveKit interfaces. orb-ui does not import livekit-client directly so
@@ -8,14 +9,17 @@ interface LKAnalyserResult {
   cleanup: () => Promise<void>
 }
 
-interface LKRemoteAudioTrack {
+interface LKAudioTrack {
   mediaStreamTrack: MediaStreamTrack
+}
+
+interface LKRemoteAudioTrack extends LKAudioTrack {
   attach(): HTMLMediaElement
   detach(): HTMLMediaElement[]
 }
 
-interface LKTrackPublication {
-  track?: LKRemoteAudioTrack
+interface LKTrackPublication<TTrack extends LKAudioTrack = LKRemoteAudioTrack> {
+  track?: TTrack
   source: string
 }
 
@@ -27,7 +31,8 @@ interface LKParticipant {
 }
 
 interface LKLocalParticipant {
-  setMicrophoneEnabled(enabled: boolean): Promise<unknown>
+  setMicrophoneEnabled(enabled: boolean): Promise<LKTrackPublication<LKAudioTrack> | undefined>
+  getTrackPublication?(source: string): LKTrackPublication<LKAudioTrack> | undefined
 }
 
 interface LKRoom {
@@ -284,15 +289,15 @@ function addRoomListener(room: LKRoom, event: string, listener: (...args: unknow
  *
  * Managed modes create and own a Room. App-managed mode listens to a Room that
  * your app already connected. The adapter emits signal-native orb-ui state,
- * including LiveKit `thinking` as `OrbState` `"thinking"` and agent audio as
- * `outputVolume`.
+ * including LiveKit `thinking` as `OrbState` `"thinking"`, local microphone
+ * audio as `inputVolume`, and agent audio as `outputVolume`.
  */
 export function createLiveKitAdapter<TTrack = unknown>(
   config: LiveKitAdapterConfig<TTrack>,
 ): LiveKitOrbAdapter | OrbAdapter {
   const managed = isManagedConfig(config)
   const createAudioAnalyser = config.createAudioAnalyser as unknown as (
-    track: LKRemoteAudioTrack,
+    track: LKAudioTrack,
     options?: Record<string, unknown>,
   ) => LKAnalyserResult
   const roomRef: { current: LKRoom | null } = {
@@ -300,13 +305,16 @@ export function createLiveKitAdapter<TTrack = unknown>(
   }
   const listeners = new Set<OrbSignalListener>()
 
-  let signal: OrbSignal = { state: 'idle', volume: 0, outputVolume: 0 }
+  let signal: OrbSignal = { state: 'idle', volume: 0, inputVolume: 0, outputVolume: 0 }
   let currentState: OrbState = 'idle'
+  let localMicrophoneTrack: LKAudioTrack | null = null
   let agentTrack: LKRemoteAudioTrack | null = null
   let audioEl: HTMLMediaElement | null = null
-  let analyserResult: LKAnalyserResult | null = null
-  let volumeInterval: ReturnType<typeof setInterval> | null = null
-  let emaVol = 0
+  let inputAnalyserResult: LKAnalyserResult | null = null
+  let inputVolumeInterval: ReturnType<typeof setInterval> | null = null
+  let outputAnalyserResult: LKAnalyserResult | null = null
+  let outputVolumeInterval: ReturnType<typeof setInterval> | null = null
+  let outputEmaVolume = 0
   let unsubscribeRoom: (() => void) | null = null
 
   function emitSignal(nextSignal: OrbSignal) {
@@ -320,57 +328,90 @@ export function createLiveKitAdapter<TTrack = unknown>(
 
   function normalizeVolume(raw: number): number {
     const gated = raw < NOISE_FLOOR ? 0 : raw
-    const rate = gated > emaVol ? EMA_ATTACK : EMA_RELEASE
-    emaVol = emaVol + (gated - emaVol) * rate
-    const gained = Math.min(emaVol * OUTPUT_GAIN, 1.0)
+    const rate = gated > outputEmaVolume ? EMA_ATTACK : EMA_RELEASE
+    outputEmaVolume = outputEmaVolume + (gated - outputEmaVolume) * rate
+    const gained = Math.min(outputEmaVolume * OUTPUT_GAIN, 1.0)
     return gained / (gained + SIGMOID_K)
   }
 
   function resetOutputVolume() {
-    emaVol = 0
+    outputEmaVolume = 0
     emitPatch({ volume: 0, outputVolume: 0 })
   }
 
-  function stopVolumeTracking({ emitZero = true }: { emitZero?: boolean } = {}) {
-    if (volumeInterval) {
-      clearInterval(volumeInterval)
-      volumeInterval = null
+  function stopInputVolumeTracking({ emitZero = true }: { emitZero?: boolean } = {}) {
+    if (inputVolumeInterval) {
+      clearInterval(inputVolumeInterval)
+      inputVolumeInterval = null
     }
 
-    if (analyserResult) {
-      analyserResult.cleanup().catch(() => {})
-      analyserResult = null
+    if (inputAnalyserResult) {
+      inputAnalyserResult.cleanup().catch(() => {})
+      inputAnalyserResult = null
     }
 
-    emaVol = 0
-    if (emitZero) emitPatch({ volume: 0, outputVolume: 0 })
+    if (emitZero) emitPatch({ volume: 0, inputVolume: 0 })
   }
 
-  function startVolumeTracking(track: LKRemoteAudioTrack) {
-    stopVolumeTracking()
+  function startInputVolumeTracking(track: LKAudioTrack) {
+    if (localMicrophoneTrack === track && inputAnalyserResult) return
+    stopInputVolumeTracking({ emitZero: false })
+    localMicrophoneTrack = track
 
     try {
-      analyserResult = createAudioAnalyser(track)
+      inputAnalyserResult = createAudioAnalyser(track)
     } catch (err) {
-      console.warn('[orb-ui/livekit] createAudioAnalyser failed:', err)
+      console.warn('[orb-ui/livekit] local createAudioAnalyser failed:', err)
       return
     }
 
-    volumeInterval = setInterval(() => {
-      if (!analyserResult || currentState !== 'speaking') return
-      const outputVolume = normalizeVolume(analyserResult.calculateVolume())
-      emitPatch({ volume: outputVolume, outputVolume })
+    inputVolumeInterval = setInterval(() => {
+      if (!inputAnalyserResult || currentState !== 'listening') return
+      const inputVolume = normalizeMicVolume(inputAnalyserResult.calculateVolume())
+      emitPatch({ volume: inputVolume, inputVolume, outputVolume: 0 })
+    }, 33)
+  }
+
+  function stopOutputVolumeTracking({ emitZero = true }: { emitZero?: boolean } = {}) {
+    if (outputVolumeInterval) {
+      clearInterval(outputVolumeInterval)
+      outputVolumeInterval = null
+    }
+
+    if (outputAnalyserResult) {
+      outputAnalyserResult.cleanup().catch(() => {})
+      outputAnalyserResult = null
+    }
+
+    outputEmaVolume = 0
+    if (emitZero) emitPatch({ volume: 0, outputVolume: 0 })
+  }
+
+  function startOutputVolumeTracking(track: LKRemoteAudioTrack) {
+    stopOutputVolumeTracking()
+
+    try {
+      outputAnalyserResult = createAudioAnalyser(track)
+    } catch (err) {
+      console.warn('[orb-ui/livekit] remote createAudioAnalyser failed:', err)
+      return
+    }
+
+    outputVolumeInterval = setInterval(() => {
+      if (!outputAnalyserResult || currentState !== 'speaking') return
+      const outputVolume = normalizeVolume(outputAnalyserResult.calculateVolume())
+      emitPatch({ volume: outputVolume, inputVolume: 0, outputVolume })
     }, 33)
   }
 
   function setState(state: OrbState) {
     currentState = state
-    emitPatch({ state })
+    emitPatch({ state, volume: 0, inputVolume: 0, outputVolume: 0 })
 
     if (state === 'speaking' && agentTrack) {
-      startVolumeTracking(agentTrack)
+      startOutputVolumeTracking(agentTrack)
     } else if (state !== 'speaking') {
-      stopVolumeTracking()
+      stopOutputVolumeTracking({ emitZero: false })
     }
   }
 
@@ -390,7 +431,16 @@ export function createLiveKitAdapter<TTrack = unknown>(
   function useAgentTrack(track: LKRemoteAudioTrack) {
     agentTrack = track
     attachAudio(track)
-    if (currentState === 'speaking') startVolumeTracking(track)
+    if (currentState === 'speaking') startOutputVolumeTracking(track)
+  }
+
+  function useLocalMicrophoneTrack(track: LKAudioTrack) {
+    startInputVolumeTracking(track)
+  }
+
+  function setupLocalMicrophone(participant: LKLocalParticipant) {
+    const publication = participant.getTrackPublication?.('microphone')
+    if (publication?.track) useLocalMicrophoneTrack(publication.track)
   }
 
   function handleAgentState(lkState: string) {
@@ -437,13 +487,26 @@ export function createLiveKitAdapter<TTrack = unknown>(
       if (agentTrack !== track) return
       agentTrack = null
       detachAudio()
-      stopVolumeTracking()
+      stopOutputVolumeTracking()
+    }
+
+    const onLocalTrackPublished = (publication: LKTrackPublication<LKAudioTrack>) => {
+      if (publication.source !== 'microphone' || !publication.track) return
+      useLocalMicrophoneTrack(publication.track)
+    }
+
+    const onLocalTrackUnpublished = (publication: LKTrackPublication<LKAudioTrack>) => {
+      if (publication.source !== 'microphone') return
+      localMicrophoneTrack = null
+      stopInputVolumeTracking()
     }
 
     const onDisconnected = () => {
+      localMicrophoneTrack = null
       agentTrack = null
       detachAudio()
-      stopVolumeTracking()
+      stopInputVolumeTracking({ emitZero: false })
+      stopOutputVolumeTracking({ emitZero: false })
       setState('idle')
     }
 
@@ -454,6 +517,16 @@ export function createLiveKitAdapter<TTrack = unknown>(
     )
     addRoomListener(room, 'trackSubscribed', onTrackSubscribed as (...args: unknown[]) => void)
     addRoomListener(room, 'trackUnsubscribed', onTrackUnsubscribed as (...args: unknown[]) => void)
+    addRoomListener(
+      room,
+      'localTrackPublished',
+      onLocalTrackPublished as (...args: unknown[]) => void,
+    )
+    addRoomListener(
+      room,
+      'localTrackUnpublished',
+      onLocalTrackUnpublished as (...args: unknown[]) => void,
+    )
     addRoomListener(room, 'disconnected', onDisconnected)
 
     unsubscribeRoom = () => {
@@ -468,8 +541,20 @@ export function createLiveKitAdapter<TTrack = unknown>(
         'trackUnsubscribed',
         onTrackUnsubscribed as (...args: unknown[]) => void,
       )
+      removeRoomListener(
+        room,
+        'localTrackPublished',
+        onLocalTrackPublished as (...args: unknown[]) => void,
+      )
+      removeRoomListener(
+        room,
+        'localTrackUnpublished',
+        onLocalTrackUnpublished as (...args: unknown[]) => void,
+      )
       removeRoomListener(room, 'disconnected', onDisconnected)
     }
+
+    setupLocalMicrophone(room.localParticipant)
 
     if (room.state === 'connected') {
       const agent = findAgentParticipant(room)
@@ -486,9 +571,12 @@ export function createLiveKitAdapter<TTrack = unknown>(
   function unbindRoom() {
     unsubscribeRoom?.()
     unsubscribeRoom = null
+    localMicrophoneTrack = null
     agentTrack = null
     detachAudio()
-    stopVolumeTracking()
+    stopInputVolumeTracking({ emitZero: false })
+    stopOutputVolumeTracking({ emitZero: false })
+    emitPatch({ volume: 0, inputVolume: 0, outputVolume: 0 })
   }
 
   const subscribe: OrbAdapter['subscribe'] = (listener) => {
@@ -526,10 +614,15 @@ export function createLiveKitAdapter<TTrack = unknown>(
         roomRef.current = nextRoom
         bindRoom(nextRoom)
         if (cfg.enableMicrophone !== false) {
-          await nextRoom.localParticipant.setMicrophoneEnabled(true)
+          const publication = await nextRoom.localParticipant.setMicrophoneEnabled(true)
+          const microphoneTrack =
+            publication?.track ??
+            nextRoom.localParticipant.getTrackPublication?.('microphone')?.track
+          if (microphoneTrack) useLocalMicrophoneTrack(microphoneTrack)
         }
       } catch (err) {
         console.error('[orb-ui/livekit] connect failed:', err)
+        if (roomRef.current === nextRoom) unbindRoom()
         nextRoom.disconnect()
         roomRef.current = null
         setState('error')

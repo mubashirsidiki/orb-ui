@@ -19,7 +19,10 @@ Target direction:
 
 ### LiveKit adapter
 
-Add first-class LiveKit Agents support with signal-native state, attached agent audio, and token-source based connection setup. The adapter should keep browser auth explicit by favoring token endpoints and LiveKit sandbox token servers over raw pasted participant tokens.
+Add first-class LiveKit Agents support with signal-native state, local microphone and remote agent
+volume metering, attached agent audio, and token-source based connection setup. The adapter should
+keep browser auth explicit by favoring token endpoints and LiveKit sandbox token servers over raw
+pasted participant tokens.
 
 ### OpenAI Realtime adapter
 

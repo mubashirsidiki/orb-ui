@@ -34,8 +34,20 @@ class FakeParticipant {
 
 class FakeRoom {
   remoteParticipants = new Map<string, FakeParticipant>()
+  localMicrophoneTrack?: FakeTrack
+  microphoneEnabled = false
   localParticipant = {
-    setMicrophoneEnabled: vi.fn(async () => undefined),
+    setMicrophoneEnabled: vi.fn(async (enabled: boolean) => {
+      this.microphoneEnabled = enabled
+      if (!enabled || !this.localMicrophoneTrack) return undefined
+      return { source: 'microphone', track: this.localMicrophoneTrack }
+    }),
+    getTrackPublication: vi.fn((source: string) => {
+      if (source !== 'microphone' || !this.microphoneEnabled || !this.localMicrophoneTrack) {
+        return undefined
+      }
+      return { source, track: this.localMicrophoneTrack }
+    }),
   }
   state = 'disconnected'
   connect = vi.fn(async () => {
@@ -46,6 +58,11 @@ class FakeRoom {
   })
 
   private listeners = new Map<string, Set<Listener>>()
+
+  constructor(localMicrophoneTrack?: FakeTrack, microphoneEnabled = false) {
+    this.localMicrophoneTrack = localMicrophoneTrack
+    this.microphoneEnabled = microphoneEnabled
+  }
 
   on(event: string, listener: Listener) {
     const listeners = this.listeners.get(event) ?? new Set<Listener>()
@@ -89,6 +106,71 @@ afterEach(() => {
 })
 
 describe('createLiveKitAdapter', () => {
+  it('emits local input volume while listening and agent output volume while speaking', () => {
+    vi.useFakeTimers()
+    createDocumentStub()
+    const localTrack = new FakeTrack()
+    const agentTrack = new FakeTrack()
+    const room = new FakeRoom(localTrack, true)
+    room.state = 'connected'
+    const agent = new FakeParticipant({
+      attributes: { 'lk.agent.state': 'listening' },
+      kind: 4,
+      track: agentTrack,
+    })
+    room.remoteParticipants.set('agent', agent)
+
+    const inputAnalyser = {
+      calculateVolume: vi.fn(() => 0.25),
+      cleanup: vi.fn(async () => undefined),
+    }
+    const outputAnalyser = {
+      calculateVolume: vi.fn(() => 0.5),
+      cleanup: vi.fn(async () => undefined),
+    }
+    const createAudioAnalyser = vi.fn((track: FakeTrack) =>
+      track === localTrack ? inputAnalyser : outputAnalyser,
+    )
+
+    const adapter = createLiveKitAdapter({ room, createAudioAnalyser })
+    const { signals, unsubscribe } = collectSignals(adapter)
+
+    vi.advanceTimersByTime(33)
+
+    expect(signals.at(-1)).toMatchObject({
+      state: 'listening',
+      inputVolume: expect.any(Number),
+      outputVolume: 0,
+    })
+    expect(signals.at(-1)?.inputVolume).toBeGreaterThan(0)
+
+    agent.attributes['lk.agent.state'] = 'speaking'
+    room.emit('participantAttributesChanged', { 'lk.agent.state': 'speaking' }, agent)
+    vi.advanceTimersByTime(33)
+
+    expect(signals.at(-1)).toMatchObject({
+      state: 'speaking',
+      inputVolume: 0,
+      outputVolume: expect.any(Number),
+    })
+    expect(signals.at(-1)?.outputVolume).toBeGreaterThan(0)
+
+    agent.attributes['lk.agent.state'] = 'listening'
+    room.emit('participantAttributesChanged', { 'lk.agent.state': 'listening' }, agent)
+    vi.advanceTimersByTime(33)
+
+    expect(outputAnalyser.cleanup).toHaveBeenCalledOnce()
+    expect(signals.at(-1)?.state).toBe('listening')
+    expect(signals.at(-1)?.inputVolume).toBeGreaterThan(0)
+
+    room.emit('localTrackUnpublished', { source: 'microphone', track: localTrack })
+
+    expect(inputAnalyser.cleanup).toHaveBeenCalledOnce()
+    expect(signals.at(-1)).toMatchObject({ volume: 0, inputVolume: 0 })
+
+    unsubscribe()
+  })
+
   it('subscribes to an existing room and emits agent signal and output volume', () => {
     vi.useFakeTimers()
     const { appendChild } = createDocumentStub()
@@ -170,12 +252,18 @@ describe('createLiveKitAdapter', () => {
 
   it('connects and disconnects a managed room without losing the subscriber', async () => {
     const signals: OrbSignal[] = []
+    const localTrack = new FakeTrack()
+    const localAnalyser = {
+      calculateVolume: vi.fn(() => 0.2),
+      cleanup: vi.fn(async () => undefined),
+    }
+    const createAudioAnalyser = vi.fn(() => localAnalyser)
 
     class RoomClass extends FakeRoom {
       static instance: FakeRoom | undefined
 
       constructor() {
-        super()
+        super(localTrack)
         RoomClass.instance = this
       }
     }
@@ -187,10 +275,7 @@ describe('createLiveKitAdapter', () => {
 
     const adapter = createLiveKitAdapter({
       getConnectionDetails,
-      createAudioAnalyser: () => ({
-        calculateVolume: () => 0,
-        cleanup: async () => undefined,
-      }),
+      createAudioAnalyser,
       RoomClass,
     })
 
@@ -204,13 +289,20 @@ describe('createLiveKitAdapter', () => {
       undefined,
     )
     expect(RoomClass.instance?.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true)
+    expect(createAudioAnalyser).toHaveBeenCalledWith(localTrack)
     expect(signals.some((signal) => signal.state === 'connecting')).toBe(true)
     expect(RoomClass.instance?.listenerCount('participantAttributesChanged')).toBe(1)
 
     await adapter.stop?.()
 
     expect(RoomClass.instance?.disconnect).toHaveBeenCalledOnce()
-    expect(signals.at(-1)).toMatchObject({ state: 'idle', volume: 0, outputVolume: 0 })
+    expect(localAnalyser.cleanup).toHaveBeenCalledOnce()
+    expect(signals.at(-1)).toMatchObject({
+      state: 'idle',
+      volume: 0,
+      inputVolume: 0,
+      outputVolume: 0,
+    })
 
     unsubscribe()
   })

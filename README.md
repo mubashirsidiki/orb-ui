@@ -103,6 +103,9 @@ function App() {
 }
 ```
 
+The LiveKit adapter meters the local microphone while listening and the remote agent audio while
+speaking, so every audio-reactive theme follows the active side of the conversation.
+
 ### Controlled mode (custom integration)
 
 ```jsx

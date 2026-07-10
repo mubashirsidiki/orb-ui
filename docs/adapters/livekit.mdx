@@ -131,7 +131,10 @@ The adapter reads the agent participant's `lk.agent.state` attribute and maps Li
 - `disconnected` -> `idle`
 - `failed` -> `error`
 
-LiveKit remote agent audio is attached when available, and `createAudioAnalyser` is used to emit normalized `outputVolume` while the agent is speaking.
+LiveKit remote agent audio is attached when available. The adapter uses `createAudioAnalyser` for
+both sides of the conversation: the local microphone emits normalized `inputVolume` while the agent
+is listening, and remote agent audio emits normalized `outputVolume` while the agent is speaking.
+The shared `volume` value follows whichever side is active so every orb-ui theme reacts correctly.
 
 ## Token handling
 
@@ -143,5 +146,5 @@ or another server-backed flow to generate short-lived participant tokens.
 If your app already normalizes LiveKit state and volume, pass those values directly as a signal.
 
 ```tsx
-<Orb signal={{ state: voiceState, outputVolume }} theme="circle" />
+<Orb signal={{ state: voiceState, inputVolume, outputVolume }} theme="circle" />
 ```
