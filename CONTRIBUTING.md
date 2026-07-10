@@ -77,10 +77,16 @@ deployments and the production site. Paste provider test config into the Provide
 Vapi public key plus assistant ID, an ElevenLabs agent ID, or LiveKit sandbox token server ID plus
 agent name.
 
-Pasted values are saved in browser local storage for that origin, and the Clear button removes the
-selected provider's saved values. To prefill the fields during local development, copy
-`demo/.env.example` to `demo/.env.local`, fill in any `VITE_*` defaults, and restart the demo
-server. Use development agents and never commit `.env.local`.
+Pipecat Cloud, OpenAI Realtime, and Gemini Live testing uses Vercel Functions under `demo/api`, so
+use a Vercel preview (or `vercel dev` from `demo/`) for those providers. Their standard API keys are
+held in page memory only and exchanged for provider session credentials; they are not saved in
+local storage or accepted through `VITE_*` variables. Self-hosted Pipecat SmallWebRTC only needs a
+public `/api/offer` URL.
+
+Non-secret playground values are saved in browser local storage for that origin, and the Clear
+button removes the selected provider's values. To prefill the fields during local development,
+copy `demo/.env.example` to `demo/.env.local`, fill in non-secret `VITE_*` defaults, and restart the
+demo server. Use development agents and never commit `.env.local`.
 
 ### Verification
 
